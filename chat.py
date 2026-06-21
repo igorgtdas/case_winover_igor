@@ -3,10 +3,19 @@ Interface CLI do AtlasShop Assist.
 Uso: python chat.py
 """
 
+import logging
+
 from orchestrator import Orchestrator
+
+logger = logging.getLogger(__name__)
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     print("=" * 60)
     print("  AtlasShop Assist — Suporte Interno")
     print("  Digite 'sair' ou 'exit' para encerrar")
@@ -28,7 +37,13 @@ def main():
         if not user_input:
             continue
 
-        response = orchestrator.chat(user_input)
+        try:
+            response = orchestrator.chat(user_input)
+        except RuntimeError as exc:
+            logger.error("Erro ao processar mensagem: %s", exc)
+            print(f"\nAssistente: [ERRO] Não foi possível processar sua mensagem. Tente novamente.")
+            continue
+
         print(f"\nAssistente: {response}")
 
 

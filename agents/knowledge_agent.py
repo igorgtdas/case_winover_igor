@@ -37,6 +37,7 @@ Formato esperado no final da resposta do LLM:
     MOTIVO_ESCALONAMENTO: <motivo ou N/A>
 """
 
+import logging
 import re
 
 from pydantic import BaseModel
@@ -46,6 +47,8 @@ from langchain.agents import create_react_agent, AgentExecutor
 from core.config import KNOWLEDGE_PARAMS, GROQ_API_KEY
 from core.knowledge_loader import load_all_docs
 from tools.knowledge_tools import get_document, get_full_knowledge_base
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeInput(BaseModel):
@@ -178,8 +181,13 @@ class KnowledgeAgent:
             KNOWLEDGE_PARAMS["context_window"],
         )
 
-        result = self.executor.invoke({
-            "input":        input_data.question,
-            "chat_history": historico,
-        })
+        try:
+            result = self.executor.invoke({
+                "input":        input_data.question,
+                "chat_history": historico,
+            })
+        except Exception as exc:
+            logger.error("KnowledgeAgent executor failed: %s", exc)
+            raise RuntimeError(f"KnowledgeAgent failed: {exc}") from exc
+
         return _parse_agent_output(result["output"])

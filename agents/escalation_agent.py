@@ -31,12 +31,16 @@ Níveis de escalonamento (conforme playbook_escalonamento.md):
     Risco                     → fraude, chargeback, comportamento suspeito
 """
 
+import logging
+
 from pydantic import BaseModel
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from core.config import ESCALATION_PARAMS, GROQ_API_KEY
 from core.knowledge_loader import load_all_docs
+
+logger = logging.getLogger(__name__)
 
 
 class EscalationInput(BaseModel):
@@ -102,11 +106,15 @@ class EscalationAgent:
 
     def run(self, input_data: EscalationInput) -> EscalationOutput:
         # EscalationAgent é stateless — o contexto já chega condensado via EscalationInput
-        result = self.chain.invoke({
-            "situation":    input_data.situation,
-            "evidence":     input_data.evidence,
-            "client_id":    input_data.client_id    or "N/A",
-            "client_plan":  input_data.client_plan  or "N/A",
-            "triggered_by": input_data.triggered_by or "N/A",
-        })
-        return EscalationOutput(**result)
+        try:
+            result = self.chain.invoke({
+                "situation":    input_data.situation,
+                "evidence":     input_data.evidence,
+                "client_id":    input_data.client_id    or "N/A",
+                "client_plan":  input_data.client_plan  or "N/A",
+                "triggered_by": input_data.triggered_by or "N/A",
+            })
+            return EscalationOutput(**result)
+        except Exception as exc:
+            logger.error("EscalationAgent failed: %s", exc)
+            raise RuntimeError(f"EscalationAgent failed: {exc}") from exc

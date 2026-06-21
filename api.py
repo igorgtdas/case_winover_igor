@@ -14,15 +14,24 @@ Endpoints principais:
 
 # TODO: adicionar autenticação (API key no header X-API-Key ou Bearer JWT)
 # TODO: adicionar rate limiting por session_id ou user_id (ex: slowapi)
-# TODO: adicionar logging estruturado (structlog ou loguru) com correlation_id por requisição
 # TODO: substituir o dicionário _sessions por armazenamento persistente (Redis) em produção
 # TODO: adicionar endpoint GET /sessions para listar sessões ativas (útil para monitoramento)
 # TODO: configurar CORS se for consumido por um front-end no futuro
 
-from fastapi import FastAPI, HTTPException, status
+import logging
+
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from orchestrator import Orchestrator
+
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -110,12 +119,23 @@ def chat(request: ChatRequest):
             user_id=request.user_id,
             session_id=request.session_id,
         )
+    except RuntimeError as exc:
+        logger.error(
+            "Agent pipeline error for session=%s: %s",
+            request.session_id, exc, exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Erro no pipeline de agentes: {exc}",
+        )
     except Exception as exc:
-        # TODO: distinguir erros de API Groq (rate limit, timeout) de erros internos
-        # TODO: registrar erro no sistema de logging com stack trace
+        logger.error(
+            "Unexpected error for session=%s: %s",
+            request.session_id, exc, exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao processar mensagem: {str(exc)}",
+            detail=f"Erro interno inesperado: {exc}",
         )
 
     return ChatResponse(response=response, session_id=request.session_id)
@@ -174,10 +194,26 @@ def health():
     Endpoint simples para health check (load balancer, monitoramento).
     """
     # TODO: verificar conectividade com Groq (ping de modelo leve)
-    # TODO: verificar se o banco SQLite está acessível
     # TODO: retornar versão da aplicação e timestamp
 
+    from pathlib import Path
+    from core.config import DB_PATH
+
+    db_ok = Path(DB_PATH).is_file()
+    if not db_ok:
+        logger.warning("Health check: database file '%s' not found", DB_PATH)
+
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "not_found",
         "sessions_ativas": len(_sessions),
     }
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Erro interno do servidor."},
+    )

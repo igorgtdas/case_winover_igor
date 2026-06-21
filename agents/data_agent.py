@@ -45,6 +45,7 @@ Formato esperado no final da resposta do LLM:
     SQL_USADO: <última query executada>
 """
 
+import logging
 import re
 
 from pydantic import BaseModel
@@ -54,6 +55,8 @@ from langchain.agents import create_react_agent, AgentExecutor
 from core.config import DATA_PARAMS, GROQ_API_KEY
 from core.knowledge_loader import load_all_docs
 from tools.sql_tools import get_sql_tools
+
+logger = logging.getLogger(__name__)
 
 
 class DataInput(BaseModel):
@@ -198,8 +201,13 @@ class DataAgent:
             DATA_PARAMS["context_window"],
         )
 
-        result = self.executor.invoke({
-            "input":        input_data.question,
-            "chat_history": historico,
-        })
+        try:
+            result = self.executor.invoke({
+                "input":        input_data.question,
+                "chat_history": historico,
+            })
+        except Exception as exc:
+            logger.error("DataAgent executor failed: %s", exc)
+            raise RuntimeError(f"DataAgent failed: {exc}") from exc
+
         return _parse_agent_output(result["output"])
