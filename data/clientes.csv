@@ -1,0 +1,13 @@
+cliente_id,nome_cliente,segmento,plano,cidade,estado,mrr_brl,status_cliente,data_inicio,owner_cs
+C001,Loja Aurora,varejo,Essencial,Campinas,SP,199,ativo,2025-11-03,-
+C002,Casa Bento,casa e decoração,Pro,Curitiba,PR,499,ativo,2025-08-19,-
+C003,Mercado Veloz,alimentos,Enterprise,São Paulo,SP,2800,ativo,2025-05-10,Marina T.
+C004,Studio Nexo,moda,Essencial,Belo Horizonte,MG,199,ativo,2026-02-22,-
+C005,Pet Pixel,pets,Pro,Recife,PE,499,ativo,2025-12-15,-
+C006,Orbit Health,saúde,Enterprise,Rio de Janeiro,RJ,3500,ativo,2025-07-01,Caio M.
+C007,Ateliê Luma,moda,Essencial,Florianópolis,SC,199,cancelado,2025-04-12,-
+C008,Ferragens Sol,indústria,Pro,Joinville,SC,499,ativo,2025-09-28,-
+C009,Bazar Prisma,varejo,Essencial,Salvador,BA,199,ativo,2026-01-08,-
+C010,Grupo Atlas Food,alimentos,Enterprise,Goiânia,GO,4200,ativo,2025-03-04,Helena R.
+C011,Móveis Delta,casa e decoração,Pro,Fortaleza,CE,499,ativo,2025-10-07,-
+C012,Papelaria Norte,educação,Essencial,Manaus,AM,199,ativo,2026-02-01,-

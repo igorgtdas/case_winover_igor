@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>AtlasShop Assist — Arquitetura Flowise</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f1117;
+    font-family: 'Segoe UI', sans-serif;
+    padding: 24px 16px;
+    min-height: 100vh;
+    overflow-x: auto;
+  }
+
+  h1 {
+    color: #e2e8f0;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    opacity: 0.7;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .canvas {
+    position: relative;
+    width: 1100px;
+    min-height: 900px;
+    margin: 0 auto;
+  }
+
+  svg.lines {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .node {
+    position: absolute;
+    border-radius: 12px;
+    border: 1.5px solid;
+    padding: 12px 14px;
+    width: 168px;
+    cursor: default;
+    transition: transform 0.15s, box-shadow 0.15s;
+    user-select: none;
+  }
+  .node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .node-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .node-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+  }
+  .node-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 4px;
+  }
+  .node-model {
+    font-size: 10px;
+    font-family: 'Courier New', monospace;
+    opacity: 0.6;
+    color: #94a3b8;
+  }
+  .node-io {
+    margin-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .io-row {
+    font-size: 10px;
+    color: #94a3b8;
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  .io-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .badge-in   { background: #1e3a5f; color: #60a5fa; }
+  .badge-out  { background: #1a3a2a; color: #4ade80; }
+  .badge-tool { background: #2d1a3a; color: #c084fc; }
+
+  .node-user      { background: #1a1f2e; border-color: #3b4db8; }
+  .node-user .node-title { color: #818cf8; }
+  .node-user .node-icon  { background: #1e2d6e; }
+
+  .node-guard     { background: #1f1a1a; border-color: #dc2626; }
+  .node-guard .node-title { color: #f87171; }
+  .node-guard .node-icon  { background: #450a0a; }
+
+  .node-router    { background: #1a1f1a; border-color: #16a34a; }
+  .node-router .node-title { color: #4ade80; }
+  .node-router .node-icon  { background: #052e16; }
+
+  .node-knowledge { background: #1a1a2e; border-color: #7c3aed; }
+  .node-knowledge .node-title { color: #c084fc; }
+  .node-knowledge .node-icon  { background: #2e1065; }
+
+  .node-data      { background: #1a251f; border-color: #0891b2; }
+  .node-data .node-title { color: #22d3ee; }
+  .node-data .node-icon  { background: #082f49; }
+
+  .node-escalation { background: #1f1a0f; border-color: #d97706; }
+  .node-escalation .node-title { color: #fbbf24; }
+  .node-escalation .node-icon  { background: #451a03; }
+
+  .node-tool      { background: #1a1a1a; border-color: #475569; }
+  .node-tool .node-title { color: #94a3b8; }
+  .node-tool .node-icon  { background: #1e293b; }
+
+  .node-output    { background: #0f1a1f; border-color: #0891b2; }
+  .node-output .node-title { color: #22d3ee; }
+  .node-output .node-icon  { background: #082f49; }
+
+  .node-block     { background: #1f0f0f; border-color: #991b1b; }
+  .node-block .node-title { color: #fca5a5; }
+  .node-block .node-icon  { background: #450a0a; }
+
+  .section-label {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #334155;
+    pointer-events: none;
+  }
+
+  .legend {
+    position: absolute;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #64748b;
+  }
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+<h1>AtlasShop Assist — Fluxo de Agentes</h1>
+
+<div class="canvas" id="canvas">
+  <svg class="lines" id="lines"></svg>
+
+  <div class="section-label" style="top:8px; left:8px">ENTRADA</div>
+  <div class="section-label" style="top:8px; left:300px">SEGURANÇA</div>
+  <div class="section-label" style="top:8px; left:570px">ROTEAMENTO</div>
+  <div class="section-label" style="top:8px; left:820px">AGENTES ESPECIALISTAS</div>
+
+  <!-- USER -->
+  <div class="node node-user" id="n-user" style="left:16px; top:240px;">
+    <div class="node-header">
+      <div class="node-icon">👤</div>
+      <div class="node-title">Usuário</div>
+    </div>
+    <div class="node-label">Atendente</div>
+    <div class="node-model">CLI Terminal</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> user_message: str</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> user_id, session_id</div>
+    </div>
+  </div>
+
+  <!-- GUARD -->
+  <div class="node node-guard" id="n-guard" style="left:220px; top:180px;">
+    <div class="node-header">
+      <div class="node-icon">🛡️</div>
+      <div class="node-title">Guard Agent</div>
+    </div>
+    <div class="node-label">Security + Safety</div>
+    <div class="node-model">llama-3.1-8b-instant</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> content, user_id</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> action, category, reason</div>
+    </div>
+  </div>
+
+  <!-- BLOCK -->
+  <div class="node node-block" id="n-block" style="left:220px; top:390px;">
+    <div class="node-header">
+      <div class="node-icon">🚫</div>
+      <div class="node-title">Bloqueado</div>
+    </div>
+    <div class="node-label">Resposta de Bloqueio</div>
+    <div class="node-model">action = "block"</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> [SECURITY/SAFETY] motivo</div>
+    </div>
+  </div>
+
+  <!-- ROUTER -->
+  <div class="node node-router" id="n-router" style="left:440px; top:180px;">
+    <div class="node-header">
+      <div class="node-icon">🔀</div>
+      <div class="node-title">Router Agent</div>
+    </div>
+    <div class="node-label">Classificador</div>
+    <div class="node-model">llama-3.1-8b-instant</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> content, chat_history</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> agent, reasoning</div>
+    </div>
+  </div>
+
+  <!-- KNOWLEDGE AGENT -->
+  <div class="node node-knowledge" id="n-knowledge" style="left:660px; top:60px;">
+    <div class="node-header">
+      <div class="node-icon">📚</div>
+      <div class="node-title">Knowledge Agent</div>
+    </div>
+    <div class="node-label">Especialista Docs</div>
+    <div class="node-model">llama-3.3-70b-versatile</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> question, chat_history</div>
+      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> get_document()</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> answer, sources[]</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> should_escalate</div>
+    </div>
+  </div>
+
+  <!-- DATA AGENT -->
+  <div class="node node-data" id="n-data" style="left:660px; top:280px;">
+    <div class="node-header">
+      <div class="node-icon">🗄️</div>
+      <div class="node-title">Data Agent</div>
+    </div>
+    <div class="node-label">Especialista SQL</div>
+    <div class="node-model">llama-3.3-70b-versatile</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> question, chat_history</div>
+      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> sql_db_query()</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> answer, sql_used</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> should_escalate</div>
+    </div>
+  </div>
+
+  <!-- SQLITE TOOL -->
+  <div class="node node-tool" id="n-sqlite" style="left:880px; top:280px;">
+    <div class="node-header">
+      <div class="node-icon">🗃️</div>
+      <div class="node-title">SQLite DB</div>
+    </div>
+    <div class="node-label">atlasshop.db</div>
+    <div class="node-model">SQLDatabaseToolkit</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> SELECT query</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> clientes, pedidos</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> reembolsos</div>
+    </div>
+  </div>
+
+  <!-- DOCS TOOL -->
+  <div class="node node-tool" id="n-docs" style="left:880px; top:60px;">
+    <div class="node-header">
+      <div class="node-icon">📄</div>
+      <div class="node-title">Knowledge Docs</div>
+    </div>
+    <div class="node-label">knowledge/*.md</div>
+    <div class="node-model">Context Stuffing</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> 6 docs injetados</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> no system prompt</div>
+    </div>
+  </div>
+
+  <!-- ESCALATION AGENT -->
+  <div class="node node-escalation" id="n-escalation" style="left:660px; top:510px;">
+    <div class="node-header">
+      <div class="node-icon">⚠️</div>
+      <div class="node-title">Escalation Agent</div>
+    </div>
+    <div class="node-label">Escalonamento</div>
+    <div class="node-model">llama-3.3-70b-versatile</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> situation, evidence</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> client_id, triggered_by</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> level, reason</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> next_steps</div>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="node node-output" id="n-output" style="left:880px; top:510px;">
+    <div class="node-header">
+      <div class="node-icon">💬</div>
+      <div class="node-title">Resposta Final</div>
+    </div>
+    <div class="node-label">Terminal Output</div>
+    <div class="node-model">chat.py</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> answer + escalation</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> texto formatado</div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend" style="top:820px; left:0;">
+    <div class="legend-item"><div class="legend-dot" style="background:#3b4db8"></div> Usuário / CLI</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> Segurança</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Roteamento</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Conhecimento</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#0891b2"></div> Dados / SQL</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div> Escalonamento</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#475569"></div> Tool / Recurso</div>
+  </div>
+</div>
+
+<script>
+const svg = document.getElementById('lines');
+
+function getCenter(el) {
+  return {
+    x: el.offsetLeft + el.offsetWidth / 2,
+    y: el.offsetTop + el.offsetHeight / 2,
+    t: el.offsetTop,
+    b: el.offsetTop + el.offsetHeight,
+    l: el.offsetLeft,
+    r: el.offsetLeft + el.offsetWidth,
+  };
+}
+
+function makePath(x1, y1, x2, y2, color, dashed = false, label = '') {
+  const midX = (x1 + x2) / 2;
+  const d = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', color);
+  path.setAttribute('stroke-width', '1.8');
+  path.setAttribute('stroke-opacity', '0.7');
+  if (dashed) path.setAttribute('stroke-dasharray', '5,4');
+  svg.appendChild(path);
+
+  const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  arrow.setAttribute('points', `${x2},${y2} ${x2-7},${y2-4} ${x2-7},${y2+4}`);
+  arrow.setAttribute('fill', color);
+  arrow.setAttribute('opacity', '0.8');
+  svg.appendChild(arrow);
+
+  if (label) {
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', (x1 + x2) / 2);
+    text.setAttribute('y', (y1 + y2) / 2 - 5);
+    text.setAttribute('fill', color);
+    text.setAttribute('font-size', '9');
+    text.setAttribute('font-family', 'Segoe UI, sans-serif');
+    text.setAttribute('font-weight', '700');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('opacity', '0.9');
+    text.textContent = label;
+    svg.appendChild(text);
+  }
+}
+
+function drawLines() {
+  svg.innerHTML = '';
+  const user       = getCenter(document.getElementById('n-user'));
+  const guard      = getCenter(document.getElementById('n-guard'));
+  const block      = getCenter(document.getElementById('n-block'));
+  const router     = getCenter(document.getElementById('n-router'));
+  const knowledge  = getCenter(document.getElementById('n-knowledge'));
+  const data       = getCenter(document.getElementById('n-data'));
+  const sqlite     = getCenter(document.getElementById('n-sqlite'));
+  const docs       = getCenter(document.getElementById('n-docs'));
+  const escalation = getCenter(document.getElementById('n-escalation'));
+  const output     = getCenter(document.getElementById('n-output'));
+
+  makePath(user.r, user.y, guard.l, guard.y, '#818cf8', false, 'mensagem');
+  makePath(guard.x, guard.b, block.x, block.t, '#f87171', true, 'block');
+  makePath(guard.r, guard.y, router.l, router.y, '#4ade80', false, 'allow');
+  makePath(router.r, router.y, knowledge.l, knowledge.y, '#c084fc', false, 'knowledge');
+  makePath(router.r, router.y, data.l, data.y, '#22d3ee', false, 'data');
+  makePath(router.r, router.y + 20, escalation.l, escalation.y - 10, '#fbbf24', true, 'escalation');
+  makePath(knowledge.r, knowledge.y, docs.l, docs.y, '#7c3aed', true);
+  makePath(data.r, data.y, sqlite.l, sqlite.y, '#0891b2', true);
+  makePath(knowledge.x + 20, knowledge.b, escalation.x - 20, escalation.t, '#fbbf24', true, 'escalate');
+  makePath(data.x, data.b, escalation.x, escalation.t, '#fbbf24', true, 'escalate');
+  makePath(escalation.r, escalation.y, output.l, output.y, '#fbbf24', false, 'relatório');
+  makePath(knowledge.r + 10, knowledge.b, output.l, output.t + 20, '#c084fc', false, 'resposta');
+  makePath(data.r + 10, data.b - 10, output.l, output.y - 20, '#22d3ee', false);
+}
+
+window.addEventListener('load', () => setTimeout(drawLines, 100));
+window.addEventListener('resize', drawLines);
+</script>
+</body>
+</html>
