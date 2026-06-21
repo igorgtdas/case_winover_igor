@@ -37,14 +37,12 @@ Formato esperado no final da resposta do LLM:
     MOTIVO_ESCALONAMENTO: <motivo ou N/A>
 """
 
-import re
-
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import create_react_agent, AgentExecutor
-from core.config import KNOWLEDGE_PARAMS, GROQ_API_KEY
+from core.config import KNOWLEDGE_PARAMS
 from core.knowledge_loader import load_all_docs
+from core.chat_history import truncar_historico
+from core.parsing import parse_escalar, parse_fontes, parse_motivo
+from core.react_agent_factory import create_react_executor
 from tools.knowledge_tools import get_document, get_full_knowledge_base
 
 
@@ -79,17 +77,6 @@ Use as tools disponíveis se precisar consultar um documento específico.
 """
 
 
-def _truncar_historico(chat_history: list[dict], context_window: int) -> list[dict]:
-    """
-    Retorna apenas as últimas `context_window` trocas do histórico.
-    Cada troca = 2 mensagens (user + assistant).
-    context_window=0 → retorna lista vazia.
-    """
-    if context_window == 0:
-        return []
-    return chat_history[-(context_window * 2):]
-
-
 def _parse_agent_output(raw: str) -> KnowledgeOutput:
     """
     Extrai campos estruturados da resposta em texto livre do agente ReAct.
@@ -98,82 +85,28 @@ def _parse_agent_output(raw: str) -> KnowledgeOutput:
         FONTES: [doc1.md, doc2.md]
         ESCALAR: true/false
         MOTIVO_ESCALONAMENTO: <motivo ou N/A>
-
-    Esta função lê essas marcações com regex e popula o KnowledgeOutput.
-    O campo `answer` recebe o texto completo para auditoria — considere limpar
-    as marcações antes de exibir ao usuário se preferir uma resposta mais limpa.
     """
-
-    # --- FONTES ---------------------------------------------------------------
-    # Formato esperado: FONTES: [politica_cancelamento_reembolso_atual.md, faq_atendimento.md]
-    sources: list[str] = []
-    fontes_match = re.search(r"FONTES:\s*\[([^\]]+)\]", raw, re.IGNORECASE)
-    if fontes_match:
-        sources = [s.strip() for s in fontes_match.group(1).split(",") if s.strip()]
-
-    # TODO: se sources estiver vazio, tentar extrair nomes de .md mencionados no texto
-
-    # --- ESCALAR --------------------------------------------------------------
-    # Formato esperado: ESCALAR: true  ou  ESCALAR: false
-    should_escalate = False
-    escalar_match = re.search(r"ESCALAR:\s*(true|false)", raw, re.IGNORECASE)
-    if escalar_match:
-        should_escalate = escalar_match.group(1).lower() == "true"
-
-    # --- MOTIVO_ESCALONAMENTO -------------------------------------------------
-    # Formato esperado: MOTIVO_ESCALONAMENTO: Cliente solicitou exceção comercial
-    escalation_reason: str | None = None
-    motivo_match = re.search(
-        r"MOTIVO_ESCALONAMENTO:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE
-    )
-    if motivo_match:
-        motivo = motivo_match.group(1).strip()
-        # Ignora o valor padrão "N/A"
-        if motivo.upper() not in ("N/A", "NA", "NONE", ""):
-            escalation_reason = motivo
-
-    # TODO: remover as marcações do campo `answer` antes de exibir ao usuário:
-    #   answer_limpo = re.sub(r"\n?(FONTES:|ESCALAR:|MOTIVO_ESCALONAMENTO:).+", "", raw).strip()
-
     return KnowledgeOutput(
         answer=raw,
-        sources=sources,
-        should_escalate=should_escalate,
-        escalation_reason=escalation_reason,
+        sources=parse_fontes(raw),
+        should_escalate=parse_escalar(raw),
+        escalation_reason=parse_motivo(raw, field_name="MOTIVO_ESCALONAMENTO"),
     )
 
 
 class KnowledgeAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=KNOWLEDGE_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=KNOWLEDGE_PARAMS["temperature"],
-            max_tokens=KNOWLEDGE_PARAMS["max_tokens"],
-        )
         self.tools = [get_full_knowledge_base, get_document]
-        self.knowledge_base = load_all_docs()
+        knowledge_base = load_all_docs()
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", _SYSTEM_PROMPT.format(knowledge_base=self.knowledge_base)),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
-
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        self.executor = AgentExecutor(
-            agent=agent,
+        self.executor = create_react_executor(
+            params=KNOWLEDGE_PARAMS,
+            system_prompt=_SYSTEM_PROMPT.format(knowledge_base=knowledge_base),
             tools=self.tools,
-            verbose=True,
-            handle_parsing_errors=True,
-            # TODO: adicionar max_iterations para evitar loops infinitos do ReAct
-            # max_iterations=5,
         )
 
     def run(self, input_data: KnowledgeInput) -> KnowledgeOutput:
-        # Aplica a janela de contexto antes de passar o histórico ao executor
-        historico = _truncar_historico(
+        historico = truncar_historico(
             input_data.chat_history,
             KNOWLEDGE_PARAMS["context_window"],
         )

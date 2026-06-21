@@ -22,10 +22,11 @@ Critérios de roteamento:
 """
 
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from core.config import ROUTER_PARAMS, GROQ_API_KEY
+from core.config import ROUTER_PARAMS
+from core.llm_factory import create_llm
+from core.chat_history import truncar_historico, formatar_historico_texto
 
 
 class RouterInput(BaseModel):
@@ -60,26 +61,9 @@ Responda SOMENTE em JSON válido, sem markdown:
 """
 
 
-def _truncar_historico(chat_history: list[dict], context_window: int) -> list[dict]:
-    """
-    Retorna apenas as últimas `context_window` trocas do histórico.
-    Cada troca = 2 mensagens (user + assistant).
-    context_window=0 → retorna lista vazia (agente sem memória).
-    """
-    if context_window == 0:
-        return []
-    # Cada turno tem 2 entradas; pega os últimas context_window turnos
-    return chat_history[-(context_window * 2):]
-
-
 class RouterAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=ROUTER_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=ROUTER_PARAMS["temperature"],
-            max_tokens=ROUTER_PARAMS["max_tokens"],
-        )
+        self.llm = create_llm(ROUTER_PARAMS)
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", _SYSTEM_PROMPT),
             ("human", "Mensagem: {content}\n\nHistórico recente: {historico}"),
@@ -88,12 +72,8 @@ class RouterAgent:
         self.chain = self.prompt | self.llm | self.parser
 
     def run(self, input_data: RouterInput) -> RouterOutput:
-        historico = _truncar_historico(input_data.chat_history, ROUTER_PARAMS["context_window"])
-
-        # Formata histórico como texto simples para o prompt
-        historico_texto = "\n".join(
-            f"{m['role'].upper()}: {m['content']}" for m in historico
-        ) or "Nenhum"
+        historico = truncar_historico(input_data.chat_history, ROUTER_PARAMS["context_window"])
+        historico_texto = formatar_historico_texto(historico)
 
         result = self.chain.invoke({
             "content":   input_data.content,

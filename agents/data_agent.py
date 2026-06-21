@@ -45,14 +45,12 @@ Formato esperado no final da resposta do LLM:
     SQL_USADO: <última query executada>
 """
 
-import re
-
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import create_react_agent, AgentExecutor
-from core.config import DATA_PARAMS, GROQ_API_KEY
+from core.config import DATA_PARAMS
 from core.knowledge_loader import load_all_docs
+from core.chat_history import truncar_historico
+from core.parsing import parse_escalar, parse_nivel, parse_motivo, parse_sql_usado
+from core.react_agent_factory import create_react_executor
 from tools.sql_tools import get_sql_tools
 
 
@@ -90,17 +88,6 @@ SQL_USADO: <última query SQL executada>
 """
 
 
-def _truncar_historico(chat_history: list[dict], context_window: int) -> list[dict]:
-    """
-    Retorna apenas as últimas `context_window` trocas do histórico.
-    Cada troca = 2 mensagens (user + assistant).
-    context_window=0 → retorna lista vazia.
-    """
-    if context_window == 0:
-        return []
-    return chat_history[-(context_window * 2):]
-
-
 def _parse_agent_output(raw: str) -> DataOutput:
     """
     Extrai campos estruturados da resposta em texto livre do agente ReAct.
@@ -110,54 +97,20 @@ def _parse_agent_output(raw: str) -> DataOutput:
         NIVEL: Risco | Financeiro | L2 | none
         MOTIVO: <motivo ou N/A>
         SQL_USADO: <query>
-
-    Esta função lê essas marcações com regex e popula o DataOutput.
     """
+    should_escalate = parse_escalar(raw)
+    nivel = parse_nivel(raw)
+    motivo = parse_motivo(raw, field_name="MOTIVO")
 
-    # --- ESCALAR --------------------------------------------------------------
-    # Formato esperado: ESCALAR: true  ou  ESCALAR: false
-    should_escalate = False
-    escalar_match = re.search(r"ESCALAR:\s*(true|false)", raw, re.IGNORECASE)
-    if escalar_match:
-        should_escalate = escalar_match.group(1).lower() == "true"
-
-    # --- NIVEL ----------------------------------------------------------------
-    # Usado apenas para compor o motivo de escalonamento
-    # Formato esperado: NIVEL: Risco
-    nivel: str | None = None
-    nivel_match = re.search(
-        r"NIVEL:\s*(Risco|Financeiro|L2|L1|none)", raw, re.IGNORECASE
-    )
-    if nivel_match:
-        nivel = nivel_match.group(1).strip()
-
-    # --- MOTIVO ---------------------------------------------------------------
-    # Formato esperado: MOTIVO: Pedido em fraud_review
+    # Inclui o nível na razão para facilitar o escalonamento downstream
     escalation_reason: str | None = None
-    motivo_match = re.search(r"MOTIVO:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE)
-    if motivo_match:
-        motivo = motivo_match.group(1).strip()
-        if motivo.upper() not in ("N/A", "NA", "NONE", ""):
-            # Inclui o nível na razão para facilitar o escalonamento downstream
-            escalation_reason = f"[{nivel}] {motivo}" if nivel else motivo
-
-    # --- SQL_USADO ------------------------------------------------------------
-    # Formato esperado: SQL_USADO: SELECT * FROM pedidos WHERE ...
-    sql_used: str | None = None
-    sql_match = re.search(r"SQL_USADO:\s*(.+?)(?:\n\n|$)", raw, re.IGNORECASE | re.DOTALL)
-    if sql_match:
-        sql_candidate = sql_match.group(1).strip()
-        # Ignora valores vazios ou "N/A"
-        if sql_candidate.upper() not in ("N/A", "NA", "NONE", ""):
-            sql_used = sql_candidate
-
-    # TODO: remover as marcações do campo `answer` antes de exibir ao usuário:
-    #   answer_limpo = re.sub(r"\n?(ESCALAR:|NIVEL:|MOTIVO:|SQL_USADO:).+", "", raw).strip()
+    if motivo:
+        escalation_reason = f"[{nivel}] {motivo}" if nivel else motivo
 
     return DataOutput(
         answer=raw,
-        sql_used=sql_used,
-        raw_data=None,  # TODO: popular com resultado bruto da última query se necessário
+        sql_used=parse_sql_usado(raw),
+        raw_data=None,
         should_escalate=should_escalate,
         escalation_reason=escalation_reason,
     )
@@ -165,35 +118,17 @@ def _parse_agent_output(raw: str) -> DataOutput:
 
 class DataAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=DATA_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=DATA_PARAMS["temperature"],
-            max_tokens=DATA_PARAMS["max_tokens"],
-        )
         self.tools = get_sql_tools()
-        self.knowledge_summary = load_all_docs()
+        knowledge_summary = load_all_docs()
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", _SYSTEM_PROMPT.format(knowledge_summary=self.knowledge_summary)),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
-
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        self.executor = AgentExecutor(
-            agent=agent,
+        self.executor = create_react_executor(
+            params=DATA_PARAMS,
+            system_prompt=_SYSTEM_PROMPT.format(knowledge_summary=knowledge_summary),
             tools=self.tools,
-            verbose=True,
-            handle_parsing_errors=True,
-            # TODO: adicionar max_iterations para evitar loops infinitos do ReAct
-            # max_iterations=5,
         )
 
     def run(self, input_data: DataInput) -> DataOutput:
-        # Aplica a janela de contexto antes de passar o histórico ao executor
-        historico = _truncar_historico(
+        historico = truncar_historico(
             input_data.chat_history,
             DATA_PARAMS["context_window"],
         )
