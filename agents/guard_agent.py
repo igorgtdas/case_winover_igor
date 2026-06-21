@@ -30,11 +30,15 @@ Responsabilidades:
         - Conteúdo adulto ou inapropriado
 """
 
+import logging
+
 from pydantic import BaseModel
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from core.config import GUARD_PARAMS, GROQ_API_KEY
+
+logger = logging.getLogger(__name__)
 
 
 class GuardInput(BaseModel):
@@ -97,5 +101,9 @@ class GuardAgent:
 
     def run(self, input_data: GuardInput) -> GuardOutput:
         # Guard é stateless — não recebe histórico (GUARD_CONTEXT_WINDOW = 0)
-        result = self.chain.invoke({"content": input_data.content})
-        return GuardOutput(**result)
+        try:
+            result = self.chain.invoke({"content": input_data.content})
+            return GuardOutput(**result)
+        except Exception as exc:
+            logger.error("GuardAgent failed for session=%s: %s", input_data.session_id, exc)
+            raise RuntimeError(f"GuardAgent failed: {exc}") from exc

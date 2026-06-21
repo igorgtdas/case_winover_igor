@@ -21,11 +21,17 @@ Critérios de roteamento:
     escalation → situações que claramente requerem atendimento humano imediato
 """
 
+import logging
+
 from pydantic import BaseModel
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from core.config import ROUTER_PARAMS, GROQ_API_KEY
+
+logger = logging.getLogger(__name__)
+
+_VALID_AGENTS = {"knowledge", "data", "escalation"}
 
 
 class RouterInput(BaseModel):
@@ -95,8 +101,21 @@ class RouterAgent:
             f"{m['role'].upper()}: {m['content']}" for m in historico
         ) or "Nenhum"
 
-        result = self.chain.invoke({
-            "content":   input_data.content,
-            "historico": historico_texto,
-        })
-        return RouterOutput(**result)
+        try:
+            result = self.chain.invoke({
+                "content":   input_data.content,
+                "historico": historico_texto,
+            })
+            output = RouterOutput(**result)
+        except Exception as exc:
+            logger.error("RouterAgent failed: %s", exc)
+            raise RuntimeError(f"RouterAgent failed: {exc}") from exc
+
+        if output.agent not in _VALID_AGENTS:
+            logger.warning(
+                "RouterAgent returned unknown agent=%r, defaulting to 'knowledge'",
+                output.agent,
+            )
+            output.agent = "knowledge"
+
+        return output

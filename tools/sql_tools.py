@@ -14,15 +14,27 @@ Input/Output (gerado pelo toolkit):
   sql_db_query_checker(query: str)   -> "<query corrigida ou erro>"
 """
 
+import logging
+
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_groq import ChatGroq
 from core.database import get_langchain_db
 from core.config import MODELS, GROQ_API_KEY
 
+logger = logging.getLogger(__name__)
+
 
 def get_sql_tools() -> list:
     """Retorna as tools SQL vinculadas ao banco SQLite da AtlasShop."""
-    db = get_langchain_db()
+    try:
+        db = get_langchain_db()
+    except FileNotFoundError:
+        logger.error(
+            "Database not found. SQL tools will be unavailable. "
+            "Run 'python setup_db.py' to create it."
+        )
+        raise
+
     llm = ChatGroq(model=MODELS["data"], api_key=GROQ_API_KEY, temperature=0)
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
     return toolkit.get_tools()
