@@ -27,7 +27,13 @@ def get_document(doc_name: str) -> str:
         doc_name: nome do arquivo sem extensão.
                   Exemplos: 'politica_cancelamento_reembolso_atual', 'playbook_escalonamento'
     """
-    path = Path(KNOWLEDGE_DIR) / f"{doc_name}.md"
+    safe_name = Path(doc_name).name
+    if safe_name != doc_name:
+        return f"Nome de documento inválido: '{doc_name}'"
+    path = (Path(KNOWLEDGE_DIR) / f"{safe_name}.md").resolve()
+    knowledge_root = Path(KNOWLEDGE_DIR).resolve()
+    if not str(path).startswith(str(knowledge_root)):
+        return f"Nome de documento inválido: '{doc_name}'"
     if not path.exists():
         return f"Documento '{doc_name}' não encontrado. Documentos disponíveis: {', '.join(p.stem for p in Path(KNOWLEDGE_DIR).glob('*.md'))}"
     return path.read_text(encoding="utf-8")

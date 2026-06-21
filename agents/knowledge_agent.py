@@ -165,10 +165,9 @@ class KnowledgeAgent:
         self.executor = AgentExecutor(
             agent=agent,
             tools=self.tools,
-            verbose=True,
+            verbose=False,
             handle_parsing_errors=True,
-            # TODO: adicionar max_iterations para evitar loops infinitos do ReAct
-            # max_iterations=5,
+            max_iterations=10,
         )
 
     def run(self, input_data: KnowledgeInput) -> KnowledgeOutput:

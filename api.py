@@ -10,19 +10,29 @@ Endpoints principais:
     GET  /session/{session_id}/history  → histórico da sessão
     DELETE /session/{session_id}        → encerra sessão e limpa histórico
     GET  /health                        → verifica se a API está no ar
+
+Segurança:
+    - Autenticação via header X-API-Key (variável API_KEY no .env)
+    - CORS restritivo por padrão (apenas origens em CORS_ORIGINS no .env)
 """
 
-# TODO: adicionar autenticação (API key no header X-API-Key ou Bearer JWT)
 # TODO: adicionar rate limiting por session_id ou user_id (ex: slowapi)
 # TODO: adicionar logging estruturado (structlog ou loguru) com correlation_id por requisição
 # TODO: substituir o dicionário _sessions por armazenamento persistente (Redis) em produção
 # TODO: adicionar endpoint GET /sessions para listar sessões ativas (útil para monitoramento)
-# TODO: configurar CORS se for consumido por um front-end no futuro
 
-from fastapi import FastAPI, HTTPException, status
+import logging
+import os
+import secrets
+
+from fastapi import FastAPI, HTTPException, Security, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from orchestrator import Orchestrator
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +43,47 @@ app = FastAPI(
     title="AtlasShop Assist API",
     description="Assistente conversacional interno para suporte e operações da AtlasShop.",
     version="0.1.0",
+    docs_url="/docs" if os.getenv("ENABLE_DOCS", "false").lower() == "true" else None,
+    redoc_url="/redoc" if os.getenv("ENABLE_DOCS", "false").lower() == "true" else None,
 )
+
+
+# ---------------------------------------------------------------------------
+# CORS — restritivo por padrão
+# ---------------------------------------------------------------------------
+
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["X-API-Key", "Content-Type"],
+)
+
+
+# ---------------------------------------------------------------------------
+# Autenticação — API Key via header X-API-Key
+# ---------------------------------------------------------------------------
+
+_API_KEY = os.getenv("API_KEY", "")
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def _verify_api_key(api_key: str | None = Security(_api_key_header)) -> str:
+    if not _API_KEY:
+        return "anonymous"
+    if not api_key or not secrets.compare_digest(api_key, _API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key inválida ou ausente.",
+        )
+    return api_key
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +136,7 @@ class HistoryResponse(BaseModel):
     response_model=ChatResponse,
     summary="Envia uma mensagem ao assistente",
 )
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, _key: str = Security(_verify_api_key)):
     """
     Recebe uma mensagem do atendente, processa pelo orquestrador e retorna a resposta.
 
@@ -112,10 +162,10 @@ def chat(request: ChatRequest):
         )
     except Exception as exc:
         # TODO: distinguir erros de API Groq (rate limit, timeout) de erros internos
-        # TODO: registrar erro no sistema de logging com stack trace
+        logger.exception("Erro ao processar mensagem na sessão %s", request.session_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao processar mensagem: {str(exc)}",
+            detail="Erro interno ao processar mensagem. Tente novamente.",
         )
 
     return ChatResponse(response=response, session_id=request.session_id)
@@ -126,7 +176,7 @@ def chat(request: ChatRequest):
     response_model=HistoryResponse,
     summary="Retorna o histórico de uma sessão",
 )
-def get_history(session_id: str):
+def get_history(session_id: str, _key: str = Security(_verify_api_key)):
     """
     Retorna todas as mensagens trocadas em uma sessão.
     """
@@ -152,7 +202,7 @@ def get_history(session_id: str):
     "/session/{session_id}",
     summary="Encerra e limpa uma sessão",
 )
-def clear_session(session_id: str):
+def clear_session(session_id: str, _key: str = Security(_verify_api_key)):
     """
     Remove o histórico e o orquestrador da sessão da memória.
     """
@@ -177,7 +227,4 @@ def health():
     # TODO: verificar se o banco SQLite está acessível
     # TODO: retornar versão da aplicação e timestamp
 
-    return {
-        "status": "ok",
-        "sessions_ativas": len(_sessions),
-    }
+    return {"status": "ok"}
