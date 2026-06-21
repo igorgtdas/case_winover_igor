@@ -32,11 +32,11 @@ Níveis de escalonamento (conforme playbook_escalonamento.md):
 """
 
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from core.config import ESCALATION_PARAMS, GROQ_API_KEY
+from core.config import ESCALATION_PARAMS
 from core.knowledge_loader import load_all_docs
+from core.llm_factory import create_llm
 
 
 class EscalationInput(BaseModel):
@@ -81,12 +81,7 @@ Responda SOMENTE em JSON válido, sem markdown:
 
 class EscalationAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=ESCALATION_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=ESCALATION_PARAMS["temperature"],
-            max_tokens=ESCALATION_PARAMS["max_tokens"],
-        )
+        self.llm = create_llm(ESCALATION_PARAMS)
         self.knowledge_base = load_all_docs()
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", _SYSTEM_PROMPT.format(knowledge_base=self.knowledge_base)),

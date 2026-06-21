@@ -31,10 +31,10 @@ Responsabilidades:
 """
 
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from core.config import GUARD_PARAMS, GROQ_API_KEY
+from core.config import GUARD_PARAMS
+from core.llm_factory import create_llm
 
 
 class GuardInput(BaseModel):
@@ -80,14 +80,7 @@ Valores possíveis:
 
 class GuardAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=GUARD_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=GUARD_PARAMS["temperature"],
-            max_tokens=GUARD_PARAMS["max_tokens"],
-            # top_p não é suportado diretamente no ChatGroq — usar model_kwargs se necessário
-            # model_kwargs={"top_p": GUARD_PARAMS["top_p"]},
-        )
+        self.llm = create_llm(GUARD_PARAMS)
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", _SYSTEM_PROMPT),
             ("human", "Mensagem do usuário:\n{content}"),
