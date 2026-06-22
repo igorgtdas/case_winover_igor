@@ -109,6 +109,8 @@ Exemplos de detecção de intenção
 → escalation
 - "chargeback aberto na operadora para o cliente C012" → {{"agent":"escalation","reasoning":"chargeback ativo requer intervenção financeira imediata"}}
 - "cliente ameaçou processo judicial, está aguardando linha" → {{"agent":"escalation","reasoning":"ameaça judicial em andamento — requer humano"}}
+- "vou processar a empresa" → {{"agent":"escalation","reasoning":"ameaça de processo judicial — requer intervenção humana"}}
+- "o cliente vai processar a empresa" → {{"agent":"escalation","reasoning":"ameaça judicial relatada pelo colaborador — requer intervenção humana"}}
 - "Situação: cliente Enterprise C021 relata R$ 40.000 em vendas paradas por falha de integração" → {{"agent":"escalation","reasoning":"situação crítica com impacto financeiro significativo — requer intervenção humana imediata"}}
 - "Situação: pedido P1042 com status_pagamento=fraud_review há 3 dias" → {{"agent":"escalation","reasoning":"pedido em fraud_review há 3 dias — risco de fraude confirmado, requer humano"}}
 - "Situação: pedido P0877 com status_pagamento=chargeback, cliente questiona cancelamento" → {{"agent":"escalation","reasoning":"chargeback ativo requer intervenção financeira imediata"}}

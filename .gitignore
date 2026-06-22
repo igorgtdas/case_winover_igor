@@ -7,5 +7,4 @@ atlasshop.db
 *.egg-info/
 .idea/
 .vscode/
-TESTES.md
 SCRIPTS.md
