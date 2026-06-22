@@ -51,6 +51,7 @@ Fluxo por mensagem:
   5. Atualiza histórico e retorna resposta
 """
 
+import logging
 from agents.guard_agent      import GuardAgent,      GuardInput
 from agents.router_agent     import RouterAgent,     RouterInput
 from agents.knowledge_agent  import KnowledgeAgent,  KnowledgeInput
@@ -67,6 +68,9 @@ _MENSAGEM_ESCALONAMENTO = (
     "Sua situação foi registrada e será encaminhada para o time responsável. "
     "Por favor, aguarde o contato ou abra um chamado diretamente com o suporte."
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -100,6 +104,10 @@ class Orchestrator:
             user_id=user_id,
             session_id=session_id,
         ))
+
+        logger.info("Guard result: action=%s category=%s should_escalate=%s reason=%s",
+                    guard_result.action, guard_result.category,
+                    guard_result.should_escalate, guard_result.reason)
 
         if guard_result.action == "block" and not guard_result.should_escalate:
             blocked_msg = (

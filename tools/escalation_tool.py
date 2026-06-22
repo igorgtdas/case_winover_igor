@@ -106,4 +106,5 @@ def log_escalation(
             session_id, nivel, triggered_by,
         )
     except Exception as exc:
-        logger.error("Falha ao registrar escalonamento: %s", exc)
+        logger.error("Falha ao registrar escalonamento: %s", exc, exc_info=True)
+        raise
