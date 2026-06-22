@@ -8,18 +8,47 @@ Construído com LangChain + Groq (LLaMA) + FastAPI. Interface via terminal ou Po
 
 ## Pré-requisitos
 
-- Python 3.11+
 - Conta Groq com chave de API: https://console.groq.com/keys
-- Pacotes listados em `requirements.txt`
+- **Docker** (recomendado) — ou Python 3.11+ para rodar sem Docker
 
 ---
 
-## Instalação
+## Instalação e execução com Docker (recomendado)
+
+A forma mais simples de rodar o projeto — não exige Python, pip ou venv instalados.
 
 ```bash
-# 1. Clone o repositório ou copie os arquivos para uma pasta local
+# 1. Clone o repositório
+git clone <url-do-repo>
+cd Case_winover
 
-# 2. Crie e ative um ambiente virtual
+# 2. Configure o ambiente
+cp .env.example .env
+# Abra .env e preencha GROQ_API_KEY com sua chave
+
+# 3. Suba o container
+docker compose up --build
+```
+
+O servidor sobe em `http://localhost:8000`.
+
+O banco SQLite é criado automaticamente dentro do container na primeira execução. Os dados ficam em um volume Docker e sobrevivem a `docker stop` / `docker start`.
+
+**Comandos úteis:**
+
+```bash
+docker compose up --build    # primeira vez (build + start)
+docker compose up            # próximas vezes (sem rebuild)
+docker compose down          # para e remove o container
+docker compose logs -f       # acompanha os logs em tempo real
+```
+
+---
+
+## Instalação sem Docker (alternativa)
+
+```bash
+# 1. Crie e ative um ambiente virtual
 python -m venv .venv
 
 # Windows
@@ -27,28 +56,21 @@ python -m venv .venv
 # Linux/macOS
 source .venv/bin/activate
 
-# 3. Instale as dependências
+# 2. Instale as dependências
 pip install -r requirements.txt
 
-# 4. Configure o ambiente
-# Windows: copie manualmente .env.example para .env
-# Linux/macOS:
+# 3. Configure o ambiente
 cp .env.example .env
 # Abra .env e preencha GROQ_API_KEY com sua chave
 
-# 5. Crie o banco SQLite a partir dos CSVs (execute uma vez)
+# 4. Crie o banco SQLite a partir dos CSVs (execute uma vez)
 python setup_db.py
-```
 
-> A tabela `escalation_logs` é criada automaticamente no banco na primeira vez que um escalonamento ocorre — não é necessário nenhum comando adicional.
-
----
-
-## Executando
-
-```bash
+# 5. Suba o servidor
 uvicorn api:app --reload
 ```
+
+> A tabela `escalation_logs` é criada automaticamente na primeira vez que um escalonamento ocorre.
 
 O servidor sobe em `http://localhost:8000`.
 
@@ -173,6 +195,9 @@ curl -s -X DELETE http://localhost:8000/session/s01
 
 ```
 .
+├── Dockerfile                  # Imagem Docker do projeto
+├── docker-compose.yml          # Sobe o container com um comando
+├── .dockerignore               # Exclui .venv, .env, __pycache__ da imagem
 ├── api.py                      # Servidor FastAPI — endpoints REST
 ├── orchestrator.py             # Controlador do fluxo conversacional
 ├── chat.py                     # Interface CLI alternativa (sem API)
