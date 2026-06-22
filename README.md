@@ -23,7 +23,8 @@ git clone <url-do-repo>
 cd Case_winover
 
 # 2. Configure o ambiente
-cp .env.example .env
+cp .env.example .env        # Linux/macOS
+copy .env.example .env      # Windows
 # Abra .env e preencha GROQ_API_KEY com sua chave
 
 # 3. Suba o container
@@ -60,7 +61,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 3. Configure o ambiente
-cp .env.example .env
+cp .env.example .env        # Linux/macOS
+copy .env.example .env      # Windows
 # Abra .env e preencha GROQ_API_KEY com sua chave
 
 # 4. Crie o banco SQLite a partir dos CSVs (execute uma vez)
