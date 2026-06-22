@@ -10,7 +10,6 @@ não-destrutivas para bancos criados em versões anteriores.
 
 import logging
 from datetime import datetime, timezone
-from langchain_core.tools import tool
 from sqlalchemy import text
 from core.database import get_engine
 
@@ -42,7 +41,6 @@ _MIGRATE_COLUMNS = [
 ]
 
 
-@tool
 def log_escalation(
     session_id: str,
     user_id: str,
