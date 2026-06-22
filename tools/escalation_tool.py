@@ -59,15 +59,18 @@ def log_escalation(
     """Registra um escalonamento na tabela escalation_logs do banco SQLite."""
     engine = get_engine()
     try:
+        # Garante tabela e colunas em transações separadas do INSERT
         with engine.begin() as conn:
             conn.execute(text(_CREATE_TABLE))
 
-            for stmt in _MIGRATE_COLUMNS:
-                try:
+        for stmt in _MIGRATE_COLUMNS:
+            try:
+                with engine.begin() as conn:
                     conn.execute(text(stmt))
-                except Exception:
-                    pass  # coluna já existe
+            except Exception:
+                pass  # coluna já existe — ignorar
 
+        with engine.begin() as conn:
             conn.execute(
                 text("""
                     INSERT INTO escalation_logs (
