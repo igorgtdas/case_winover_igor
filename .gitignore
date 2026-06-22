@@ -7,8 +7,5 @@ atlasshop.db
 *.egg-info/
 .idea/
 .vscode/
-GUIA_PARA_LEIGOS.md
-MONOGRAFIA.md
-Ligar _servidor.txt
 TESTES.md
 SCRIPTS.md
