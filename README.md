@@ -257,14 +257,14 @@ Mensagens para experimentar via Postman, curl ou `python chat.py`:
 │   ├── database.py             # Conexão SQLite via SQLAlchemy
 │   ├── knowledge_loader.py     # Carrega documentos .md da pasta knowledge/
 │   ├── session_context.py      # Start State — variáveis iniciais da sessão
-│   ├── escalation_log.py       # Registro de escalonamentos no banco
 │   ├── rate_limit.py           # Tratamento de RateLimitError do Groq (429)
 │   └── trace.py                # Modelo ToolCall — rastreamento de chamadas de tools
 │
 ├── tools/
 │   ├── knowledge_tools.py      # Tools LangChain para consulta de documentos
 │   ├── sql_tools.py            # Tools LangChain (SQLDatabaseToolkit)
-│   └── clock_tool.py           # Retorna data/hora atual no fuso de Brasília
+│   ├── clock_tool.py           # Retorna data/hora atual no fuso de Brasília
+│   └── escalation_tool.py      # Registra escalonamentos no banco (log_escalation)
 │
 ├── knowledge/                  # Base de conhecimento interna (arquivos .md)
 │   ├── catalogo_planos.md

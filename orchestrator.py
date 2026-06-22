@@ -24,7 +24,7 @@ O QUE USA:
     - agents/guard_agent.py, router_agent.py, knowledge_agent.py,
       data_agent.py, escalation_agent.py → todos os agentes do sistema
     - core/session_context.py → contexto do colaborador (nome, e-mail)
-    - core/escalation_log.py → persiste escalonamentos no SQLite
+    - tools/escalation_tool.py → persiste escalonamentos no SQLite
     - core/rate_limit.py → captura RateLimitError do Groq e retorna mensagem amigável
 
 COM QUEM CONVERSA:
@@ -57,7 +57,7 @@ from agents.knowledge_agent  import KnowledgeAgent,  KnowledgeInput
 from agents.data_agent       import DataAgent,       DataInput
 from agents.escalation_agent import EscalationAgent, EscalationInput
 from core.session_context    import SessionContext
-from core.escalation_log     import registrar_escalamento
+from tools.escalation_tool   import log_escalation as registrar_escalamento
 from core.rate_limit         import RateLimitError, MENSAGEM_RATE_LIMIT
 
 # Mensagem exibida ao usuário quando há escalonamento

@@ -1,55 +1,16 @@
 """
-================================================================================
-core/escalation_log.py — Registro de Escalonamentos no Banco de Dados
-================================================================================
+tools/escalation_tool.py — Tool de Registro de Escalonamentos
 
-O QUE É:
-    Módulo de persistência responsável por gravar cada escalonamento gerado
-    pelo EscalationAgent na tabela `escalation_logs` do SQLite.
+Registra escalonamentos no banco SQLite (tabela escalation_logs).
+Chamada pelo Orchestrator após o EscalationAgent confirmar should_escalate=True.
 
-PARA QUE SERVE:
-    - Criar a tabela automaticamente se não existir (self-migrating)
-    - Executar migrações não-destrutivas quando novas colunas são adicionadas
-      (ex: pedido_id, tipo) sem precisar recriar o banco
-    - Registrar: quem escalou, qual sessão, qual nível (L1/L2/Financeiro/Risco),
-      motivo, evidência, próximos passos, mensagem original e colaborador responsável
-
-O QUE USA:
-    - SQLAlchemy (text + engine) → executa INSERT no banco SQLite
-    - core/database.py → get_engine() para obter a conexão
-    - datetime/timezone → timestamp ISO 8601 em UTC
-
-COM QUEM CONVERSA:
-    ← Chamado por: orchestrator.py nos três pontos de escalonamento:
-        1. GuardAgent detecta should_escalate=True (categoria: Risco)
-        2. GuardAgent bloqueia por security (injection/jailbreak)
-        3. RouterAgent encaminha para escalation e EscalationAgent confirma
-    → Persiste em: atlasshop.db (tabela escalation_logs)
-
-================================================================================
-Registro de escalonamentos no banco de dados.
-
-Cria a tabela `escalation_logs` automaticamente na primeira chamada (se não existir).
-Cada escalonamento gera uma linha com todas as informações relevantes para auditoria.
-
-Schema da tabela:
-    id               INTEGER  PRIMARY KEY AUTOINCREMENT
-    created_at       TEXT     timestamp ISO 8601
-    session_id       TEXT
-    user_id          TEXT
-    user_name        TEXT     (do SessionContext, se disponível)
-    user_email       TEXT     (do SessionContext, se disponível)
-    plano            TEXT     (do SessionContext, se disponível)
-    nivel            TEXT     L1 | L2 | Financeiro | Risco | none
-    motivo           TEXT
-    evidencia        TEXT
-    proximos_passos  TEXT
-    mensagem_usuario TEXT     mensagem original que disparou o escalonamento
-    triggered_by     TEXT     knowledge_agent | data_agent | user
+Cria a tabela automaticamente se não existir e executa migrações
+não-destrutivas para bancos criados em versões anteriores.
 """
 
 import logging
 from datetime import datetime, timezone
+from langchain_core.tools import tool
 from sqlalchemy import text
 from core.database import get_engine
 
@@ -81,7 +42,8 @@ _MIGRATE_COLUMNS = [
 ]
 
 
-def registrar_escalamento(
+@tool
+def log_escalation(
     session_id: str,
     user_id: str,
     mensagem_usuario: str,
@@ -96,22 +58,17 @@ def registrar_escalamento(
     pedido_id: str | None = None,
     tipo: str | None = None,
 ) -> None:
-    """
-    Insere um registro de escalonamento na tabela escalation_logs.
-    Cria a tabela automaticamente se ainda não existir.
-    """
+    """Registra um escalonamento na tabela escalation_logs do banco SQLite."""
     engine = get_engine()
     try:
         with engine.begin() as conn:
-            # Garante que a tabela existe
             conn.execute(text(_CREATE_TABLE))
 
-            # Migração não-destrutiva: adiciona colunas novas se o banco já existia
             for stmt in _MIGRATE_COLUMNS:
                 try:
                     conn.execute(text(stmt))
                 except Exception:
-                    pass  # coluna já existe — ignorar
+                    pass  # coluna já existe
 
             conn.execute(
                 text("""
@@ -151,5 +108,4 @@ def registrar_escalamento(
             session_id, nivel, triggered_by,
         )
     except Exception as exc:
-        # Log do erro mas não interrompe o fluxo — o usuário já recebeu a resposta padrão
-        logger.error("Falha ao registrar escalonamento no banco: %s", exc)
+        logger.error("Falha ao registrar escalonamento: %s", exc)
