@@ -44,6 +44,22 @@ docker compose down          # para e remove o container
 docker compose logs -f       # acompanha os logs em tempo real
 ```
 
+### Usando a interface CLI (chat.py)
+
+O `chat.py` é um client que se comunica com o servidor via HTTP. Para usá-lo, mantenha o Docker rodando em um terminal e abra um segundo terminal para o chat:
+
+**Terminal 1:**
+```bash
+docker compose up
+```
+
+**Terminal 2:**
+```bash
+python chat.py
+```
+
+> O `chat.py` requer Python instalado localmente, mas apenas para fazer chamadas HTTP para `localhost:8000` — toda a lógica roda dentro do Docker.
+
 ---
 
 ## Instalação sem Docker (alternativa)
