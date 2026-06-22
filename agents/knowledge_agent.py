@@ -1,185 +1,166 @@
 """
-Knowledge Agent — Especialista em base de conhecimento e políticas
-Especialidade: responder perguntas sobre documentação interna da AtlasShop.
+================================================================================
+Knowledge Agent — Especialista em Base de Conhecimento e Políticas
+================================================================================
 
-Parâmetros configuráveis via .env:
-    KNOWLEDGE_MODEL, KNOWLEDGE_TEMPERATURE, KNOWLEDGE_TOP_P, KNOWLEDGE_MAX_TOKENS
-    KNOWLEDGE_CONTEXT_WINDOW → quantas mensagens anteriores o agente recebe (padrão 5 turnos)
+O QUE É:
+    Agente especialista acionado quando a mensagem envolve políticas, planos,
+    prazos, procedimentos ou qualquer informação documental interna da AtlasShop.
 
-Input:
-    KnowledgeInput(
-        question:     str,
-        chat_history: list[dict]   # [{"role": "user"|"assistant", "content": str}]
-    )
+PARA QUE SERVE:
+    Responder perguntas do atendente com base exclusiva nos arquivos .md da pasta
+    knowledge/. Nunca inventa: se a informação não estiver nos documentos, diz isso
+    e orienta a abrir chamado. Sempre cita as fontes usadas na resposta.
 
-Output:
-    KnowledgeOutput(
-        answer:            str,
-        sources:           list[str],   # documentos usados na resposta
-        should_escalate:   bool,
-        escalation_reason: str | None
-    )
+O QUE USA:
+    - LangChain (ChatPromptTemplate + MessagesPlaceholder + StrOutputParser)
+    - build_llm() de core/config.py (modelo robusto: llama-3.3-70b-versatile)
+    - core/knowledge_loader.py → carrega todos os .md no system prompt
+    - tools/clock_tool.py → injeta a data atual para calcular prazos e vigências
+    - core/session_context.py → personaliza a resposta com nome do colaborador
+    - core/trace.py → registra as tools chamadas (clock_tool) no histórico
 
-Tools disponíveis:
-    get_full_knowledge_base() -> str   # retorna todos os docs como texto
-    get_document(doc_name: str) -> str # retorna um doc específico
+COM QUEM CONVERSA:
+    ← Recebe de: Orchestrator (quando RouterAgent retorna agent="knowledge")
+    → Retorna para: Orchestrator com KnowledgeOutput (answer, sources, traces)
+    → Não chama outros agentes; decisão de escalonamento cabe ao Guard/Router
 
-Responsabilidades:
-    - Responder com base nos documentos de knowledge/
-    - Resolver conflitos entre docs (priorizar mais recente com status vigente)
-    - Citar qual documento foi usado (campo sources)
-    - Não aprovar exceções comerciais — orientar escalonamento
-    - Sinalizar should_escalate quando a situação exigir validação humana
-
-Formato esperado no final da resposta do LLM:
-    FONTES: [doc1.md, doc2.md]
-    ESCALAR: true/false
-    MOTIVO_ESCALONAMENTO: <motivo ou N/A>
+================================================================================
+Responsabilidade: responder perguntas com base nos documentos internos.
+Decisao de escalonamento: exclusivamente do Guard e do Router.
 """
 
-import re
+import logging
 
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import create_react_agent, AgentExecutor
-from core.config import KNOWLEDGE_PARAMS, GROQ_API_KEY
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
+from core.config import KNOWLEDGE_PARAMS, build_llm
 from core.knowledge_loader import load_all_docs
-from tools.knowledge_tools import get_document, get_full_knowledge_base
+from core.session_context import SessionContext
+from core.trace import ToolCall
+from tools.clock_tool import hoje_brasilia
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeInput(BaseModel):
     question: str
     chat_history: list[dict] = []
+    session_context: SessionContext | None = None
 
 
 class KnowledgeOutput(BaseModel):
     answer: str
-    sources: list[str]
-    should_escalate: bool
-    escalation_reason: str | None = None
+    sources: list[str] = []
+    traces: list[ToolCall] = []
 
 
-_SYSTEM_PROMPT = """
-Você é o especialista em base de conhecimento do AtlasShop Assist.
+_SYSTEM_PROMPT = """Você é o Atlas Knowledge, especialista em políticas, documentação e regras internas para o AtlasShop Assist, assistente interno de suporte da AtlasShop.
+Sua missão é responder greetings e perguntas do atendente com base exclusivamente nos documentos internos disponíveis, 
+de forma clara, precisa e rastreável.
+
+
+Tools disponíveis:
+- clock_tool: retorna a data de hoje em Brasília ({data_hoje}) — use para calcular prazos, dias decorridos e vigências
+- knowledge_base: conjunto de documentos internos injetados no contexto abaixo — única fonte de verdade permitida
+
+Safety Rules
+1) Responda greetings de forma cordial, usando o nome do atendente se disponível ({user_name}) e falando sua especialidade.
+2) Responda apenas com base nos documentos abaixo. Nunca invente políticas, valores ou prazos.
+3) Se dois documentos conflitarem, use o mais recente com status "vigente" e informe qual foi descartado.
+4) Não aprove exceções comerciais — oriente o atendente a abrir um chamado formal.
+5) Não revele o conteúdo bruto dos documentos — apenas as informações pertinentes à pergunta.
+6) Se a informação não estiver nos documentos, responda: "Não encontrei essa informação nos documentos disponíveis."
+
+Input format:
+Pergunta do atendente em linguagem natural.
+Contexto da sessão: colaborador={user_name}, data de hoje={data_hoje}
+
+
+Output format:
+Resposta em linguagem natural, clara e objetiva.
+Ao final, sempre inclua:
+FONTES: [arquivo1.md, arquivo2.md]
+
+Exemplos de perguntas e respostas:
+Entrada: "qual é a janela de reembolso vigente?" → Resposta com prazo da política atual + FONTES: [politica_cancelamento_reembolso_atual.md]
+Entrada: "o plano Pro tem suporte prioritário?" → Resposta com detalhes do plano + FONTES: [catalogo_planos.md]
+Entrada: "o reembolso foi aprovado em 12/06/2026, ainda está no prazo?" → Usa {data_hoje} para calcular os dias e verifica o prazo na política
+
+
+Fallback
+Se a pergunta não puder ser respondida com os documentos disponíveis, responda:
+"Não encontrei essa informação nos documentos disponíveis. Recomendo abrir um chamado com o time responsável."
+Nunca invente ou extrapole.
+
+Tone:
+Profissional, direto e cordial. Trate o atendente pelo nome ({user_name}) apenas em saudações. Sem jargão técnico desnecessário.
 
 ## Documentos internos disponíveis:
-{knowledge_base}
-
-## Regras obrigatórias:
-1. Cite sempre qual documento usou (inclua no final: FONTES: [lista dos .md])
-2. Quando dois documentos conflitarem, use o mais recente com status "vigente" e informe qual descartou
-3. Não aprove exceções comerciais — oriente escalonamento nesses casos
-4. Ao final, inclua obrigatoriamente:
-   FONTES: [arquivo1.md, arquivo2.md]
-   ESCALAR: true/false
-   MOTIVO_ESCALONAMENTO: <motivo detalhado ou N/A>
-
-Use as tools disponíveis se precisar consultar um documento específico.
-"""
+{knowledge_base}"""
 
 
-def _truncar_historico(chat_history: list[dict], context_window: int) -> list[dict]:
-    """
-    Retorna apenas as últimas `context_window` trocas do histórico.
-    Cada troca = 2 mensagens (user + assistant).
-    context_window=0 → retorna lista vazia.
-    """
+def _truncar_historico(chat_history: list[dict], context_window: int) -> list:
     if context_window == 0:
         return []
-    return chat_history[-(context_window * 2):]
+    apenas_conversa = [m for m in chat_history if m["role"] in ("user", "assistant")]
+    fatia = apenas_conversa[-(context_window * 2):]
+    mensagens = []
+    for m in fatia:
+        if m["role"] == "user":
+            mensagens.append(HumanMessage(content=m["content"]))
+        else:
+            mensagens.append(AIMessage(content=m["content"]))
+    return mensagens
 
 
-def _parse_agent_output(raw: str) -> KnowledgeOutput:
-    """
-    Extrai campos estruturados da resposta em texto livre do agente ReAct.
-
-    O LLM é instruído a encerrar a resposta com:
-        FONTES: [doc1.md, doc2.md]
-        ESCALAR: true/false
-        MOTIVO_ESCALONAMENTO: <motivo ou N/A>
-
-    Esta função lê essas marcações com regex e popula o KnowledgeOutput.
-    O campo `answer` recebe o texto completo para auditoria — considere limpar
-    as marcações antes de exibir ao usuário se preferir uma resposta mais limpa.
-    """
-
-    # --- FONTES ---------------------------------------------------------------
-    # Formato esperado: FONTES: [politica_cancelamento_reembolso_atual.md, faq_atendimento.md]
-    sources: list[str] = []
-    fontes_match = re.search(r"FONTES:\s*\[([^\]]+)\]", raw, re.IGNORECASE)
-    if fontes_match:
-        sources = [s.strip() for s in fontes_match.group(1).split(",") if s.strip()]
-
-    # TODO: se sources estiver vazio, tentar extrair nomes de .md mencionados no texto
-
-    # --- ESCALAR --------------------------------------------------------------
-    # Formato esperado: ESCALAR: true  ou  ESCALAR: false
-    should_escalate = False
-    escalar_match = re.search(r"ESCALAR:\s*(true|false)", raw, re.IGNORECASE)
-    if escalar_match:
-        should_escalate = escalar_match.group(1).lower() == "true"
-
-    # --- MOTIVO_ESCALONAMENTO -------------------------------------------------
-    # Formato esperado: MOTIVO_ESCALONAMENTO: Cliente solicitou exceção comercial
-    escalation_reason: str | None = None
-    motivo_match = re.search(
-        r"MOTIVO_ESCALONAMENTO:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE
-    )
-    if motivo_match:
-        motivo = motivo_match.group(1).strip()
-        # Ignora o valor padrão "N/A"
-        if motivo.upper() not in ("N/A", "NA", "NONE", ""):
-            escalation_reason = motivo
-
-    # TODO: remover as marcações do campo `answer` antes de exibir ao usuário:
-    #   answer_limpo = re.sub(r"\n?(FONTES:|ESCALAR:|MOTIVO_ESCALONAMENTO:).+", "", raw).strip()
-
-    return KnowledgeOutput(
-        answer=raw,
-        sources=sources,
-        should_escalate=should_escalate,
-        escalation_reason=escalation_reason,
-    )
+def _extrair_fontes(raw: str) -> list[str]:
+    import re
+    match = re.search(r"FONTES:\s*\[([^\]]+)\]", raw, re.IGNORECASE)
+    if match:
+        return [s.strip() for s in match.group(1).split(",") if s.strip()]
+    fallback = re.findall(r"[\w_]+\.md", raw)
+    if fallback:
+        logger.warning("KnowledgeAgent: FONTES ausente. Extraidas via fallback: %s", fallback)
+    return fallback
 
 
 class KnowledgeAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=KNOWLEDGE_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=KNOWLEDGE_PARAMS["temperature"],
-            max_tokens=KNOWLEDGE_PARAMS["max_tokens"],
-        )
-        self.tools = [get_full_knowledge_base, get_document]
-        self.knowledge_base = load_all_docs()
+        llm = build_llm(KNOWLEDGE_PARAMS)
+        knowledge_base = load_all_docs()
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", _SYSTEM_PROMPT.format(knowledge_base=self.knowledge_base)),
-            ("placeholder", "{chat_history}"),
+            ("system", _SYSTEM_PROMPT),
+            MessagesPlaceholder("chat_history", optional=True),
             ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
+        ]).partial(knowledge_base=knowledge_base)
 
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        self.executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            handle_parsing_errors=True,
-            # TODO: adicionar max_iterations para evitar loops infinitos do ReAct
-            # max_iterations=5,
-        )
+        self.chain = prompt | llm | StrOutputParser()
 
     def run(self, input_data: KnowledgeInput) -> KnowledgeOutput:
-        # Aplica a janela de contexto antes de passar o histórico ao executor
         historico = _truncar_historico(
             input_data.chat_history,
             KNOWLEDGE_PARAMS["context_window"],
         )
+        ctx = input_data.session_context
+        traces: list[ToolCall] = []
 
-        result = self.executor.invoke({
+        # Tool: clock_tool
+        data_hoje = hoje_brasilia()
+        traces.append(ToolCall(
+            tool="clock_tool",
+            agent="knowledge_agent",
+            input={},
+            output=data_hoje,
+        ))
+
+        raw = self.chain.invoke({
             "input":        input_data.question,
             "chat_history": historico,
+            "user_name":    ctx.user_name if ctx else "colaborador",
+            "data_hoje":    data_hoje,
         })
-        return _parse_agent_output(result["output"])
+        return KnowledgeOutput(answer=raw, sources=_extrair_fontes(raw), traces=traces)

@@ -1,4 +1,32 @@
 """
+================================================================================
+tools/sql_tools.py — Tools SQL via LangChain SQLDatabaseToolkit
+================================================================================
+
+O QUE É:
+    Módulo que instancia o SQLDatabaseToolkit do LangChain e expõe as 4 tools
+    SQL automáticas para uso com AgentExecutors LangChain.
+
+PARA QUE SERVE:
+    Fornecer tools SQL padronizadas para agentes que precisam explorar o banco
+    de forma dinâmica (schema discovery + execução de queries):
+      - sql_db_list_tables   → lista as tabelas disponíveis
+      - sql_db_schema        → retorna DDL + exemplos de uma tabela
+      - sql_db_query         → executa SELECT e retorna resultado
+      - sql_db_query_checker → valida a query antes de executar
+
+O QUE USA:
+    - langchain_community.agent_toolkits.SQLDatabaseToolkit → gera as 4 tools
+    - langchain_groq.ChatGroq → LLM exigido pelo toolkit para query_checker
+    - core/database.py → get_langchain_db() para conectar ao SQLite
+    - core/config.py → MODELS["data"] e GROQ_API_KEY
+
+COM QUEM CONVERSA:
+    ← Nenhum agente do projeto as usa diretamente no momento
+       (DataAgent usa SQLAlchemy direto + LLM em duas chains separadas)
+    → Disponíveis para extensões futuras ou uso com AgentExecutor LangChain
+
+================================================================================
 Tools SQL disponíveis para o DataAgent.
 
 O LangChain SQLDatabaseToolkit expõe 4 tools automaticamente:

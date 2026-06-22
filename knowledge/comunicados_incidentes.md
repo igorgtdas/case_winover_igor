@@ -1,7 +1,7 @@
 # Comunicados e Incidentes Recentes
-**Documento:** comunicados_incidentes  
-**Versão:** 1.2  
-**Última atualização:** 2026-03-05  
+**Documento:** comunicados_incidentes
+**Versão:** 1.2
+**Última atualização:** 2026-03-05
 **Status:** vigente
 
 ## Ocorrências recentes

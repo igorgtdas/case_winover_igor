@@ -1,4 +1,31 @@
 """
+================================================================================
+tools/knowledge_tools.py — Tools de Base de Conhecimento (LangChain)
+================================================================================
+
+O QUE É:
+    Módulo que define duas LangChain Tools (@tool) para acesso à base de
+    documentos internos da AtlasShop. Complementa core/knowledge_loader.py
+    com uma interface padronizada para uso em AgentExecutors LangChain.
+
+PARA QUE SERVE:
+    - get_full_knowledge_base() → retorna todos os documentos .md concatenados
+    - get_document(doc_name) → retorna um documento específico pelo nome
+    Permitem que um agente LangChain com AgentExecutor decida dinamicamente
+    quais documentos consultar, em vez de receber tudo no system prompt.
+
+O QUE USA:
+    - langchain_core.tools.tool → decorator que transforma função em LangChain Tool
+    - core/knowledge_loader.py → load_all_docs() como backend de leitura
+    - core/config.py → KNOWLEDGE_DIR para saber onde estão os arquivos
+    - pathlib.Path → acesso direto ao arquivo quando doc_name é especificado
+
+COM QUEM CONVERSA:
+    ← Nenhum agente do projeto as usa diretamente no momento
+       (KnowledgeAgent injeta os docs no system prompt via load_all_docs())
+    → Disponíveis para extensões futuras ou uso com AgentExecutor LangChain
+
+================================================================================
 Tools disponíveis para o KnowledgeAgent.
 
 Input/Output de cada tool:

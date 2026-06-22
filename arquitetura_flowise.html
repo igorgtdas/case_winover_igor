@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>AtlasShop Assist — Arquitetura Flowise</title>
+<title>AtlasShop Assist — Arquitetura</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -12,24 +12,21 @@
     min-height: 100vh;
     overflow-x: auto;
   }
-
   h1 {
     color: #e2e8f0;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     margin-bottom: 24px;
     opacity: 0.7;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
-
   .canvas {
     position: relative;
-    width: 1100px;
-    min-height: 900px;
+    width: 1340px;
+    min-height: 980px;
     margin: 0 auto;
   }
-
   svg.lines {
     position: absolute;
     top: 0; left: 0;
@@ -38,87 +35,62 @@
     overflow: visible;
   }
 
+  /* --- BASE NODE --- */
   .node {
     position: absolute;
     border-radius: 12px;
     border: 1.5px solid;
     padding: 12px 14px;
-    width: 168px;
+    width: 172px;
     cursor: default;
     transition: transform 0.15s, box-shadow 0.15s;
     user-select: none;
   }
-  .node:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-  }
+  .node:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
 
-  .node-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
+  .node-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .node-icon {
-    width: 28px; height: 28px;
-    border-radius: 6px;
+    width: 28px; height: 28px; border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
+    font-size: 14px; flex-shrink: 0;
   }
-  .node-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    line-height: 1.2;
-  }
-  .node-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #e2e8f0;
-    margin-bottom: 4px;
-  }
-  .node-model {
-    font-size: 10px;
-    font-family: 'Courier New', monospace;
-    opacity: 0.6;
-    color: #94a3b8;
-  }
+  .node-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.2; }
+  .node-label { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px; }
+  .node-model { font-size: 10px; font-family: 'Courier New', monospace; opacity: 0.6; color: #94a3b8; }
   .node-io {
-    margin-top: 8px;
-    border-top: 1px solid rgba(255,255,255,0.08);
-    padding-top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+    margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 8px; display: flex; flex-direction: column; gap: 3px;
   }
-  .io-row {
-    font-size: 10px;
-    color: #94a3b8;
-    display: flex;
-    align-items: flex-start;
-    gap: 5px;
-  }
+  .io-row { font-size: 10px; color: #94a3b8; display: flex; align-items: flex-start; gap: 5px; }
   .io-badge {
-    font-size: 9px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 3px;
-    flex-shrink: 0;
-    margin-top: 1px;
+    font-size: 9px; font-weight: 700; padding: 1px 5px;
+    border-radius: 3px; flex-shrink: 0; margin-top: 1px;
   }
-  .badge-in   { background: #1e3a5f; color: #60a5fa; }
-  .badge-out  { background: #1a3a2a; color: #4ade80; }
-  .badge-tool { background: #2d1a3a; color: #c084fc; }
+  .badge-in    { background: #1e3a5f; color: #60a5fa; }
+  .badge-out   { background: #1a3a2a; color: #4ade80; }
+  .badge-tool  { background: #2d1a3a; color: #c084fc; }
+  .badge-check { background: #292000; color: #fbbf24; }
 
+  /* --- NODE THEMES --- */
   .node-user      { background: #1a1f2e; border-color: #3b4db8; }
   .node-user .node-title { color: #818cf8; }
   .node-user .node-icon  { background: #1e2d6e; }
 
+  .node-session   { background: #1a1a2a; border-color: #6366f1; border-style: dashed; }
+  .node-session .node-title { color: #a5b4fc; }
+  .node-session .node-icon  { background: #1e1e4e; }
+
   .node-guard     { background: #1f1a1a; border-color: #dc2626; }
   .node-guard .node-title { color: #f87171; }
   .node-guard .node-icon  { background: #450a0a; }
+
+  .node-checker   { background: #1f1a00; border-color: #ca8a04; border-style: dashed; }
+  .node-checker .node-title { color: #fde68a; }
+  .node-checker .node-icon  { background: #422006; }
+
+  .node-block     { background: #1f0f0f; border-color: #991b1b; }
+  .node-block .node-title { color: #fca5a5; }
+  .node-block .node-icon  { background: #450a0a; }
 
   .node-router    { background: #1a1f1a; border-color: #16a34a; }
   .node-router .node-title { color: #4ade80; }
@@ -140,42 +112,29 @@
   .node-tool .node-title { color: #94a3b8; }
   .node-tool .node-icon  { background: #1e293b; }
 
-  .node-output    { background: #0f1a1f; border-color: #0891b2; }
-  .node-output .node-title { color: #22d3ee; }
-  .node-output .node-icon  { background: #082f49; }
+  .node-db        { background: #121a12; border-color: #166534; }
+  .node-db .node-title { color: #86efac; }
+  .node-db .node-icon  { background: #052e16; }
 
-  .node-block     { background: #1f0f0f; border-color: #991b1b; }
-  .node-block .node-title { color: #fca5a5; }
-  .node-block .node-icon  { background: #450a0a; }
+  .node-langsmith { background: #0f1a20; border-color: #155e75; border-style: dashed; }
+  .node-langsmith .node-title { color: #67e8f9; }
+  .node-langsmith .node-icon  { background: #082f3e; }
 
+  .node-response  { background: #141a14; border-color: #15803d; }
+  .node-response .node-title { color: #86efac; }
+  .node-response .node-icon  { background: #052e16; }
+
+  /* --- SECTION LABELS --- */
   .section-label {
     position: absolute;
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #334155;
-    pointer-events: none;
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: #334155; pointer-events: none;
   }
 
-  .legend {
-    position: absolute;
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    padding: 10px 0;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 10px;
-    color: #64748b;
-  }
-  .legend-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-  }
+  /* --- LEGEND --- */
+  .legend { position: absolute; display: flex; gap: 16px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #64748b; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
 </style>
 </head>
 <body>
@@ -184,27 +143,46 @@
 <div class="canvas" id="canvas">
   <svg class="lines" id="lines"></svg>
 
-  <div class="section-label" style="top:8px; left:8px">ENTRADA</div>
-  <div class="section-label" style="top:8px; left:300px">SEGURANÇA</div>
-  <div class="section-label" style="top:8px; left:570px">ROTEAMENTO</div>
-  <div class="section-label" style="top:8px; left:820px">AGENTES ESPECIALISTAS</div>
+  <!-- SECTION LABELS -->
+  <div class="section-label" style="top:8px; left:16px">Entrada</div>
+  <div class="section-label" style="top:8px; left:240px">Segurança</div>
+  <div class="section-label" style="top:8px; left:440px">Decisão</div>
+  <div class="section-label" style="top:8px; left:640px">Roteamento</div>
+  <div class="section-label" style="top:8px; left:850px">Agentes Especialistas</div>
+  <div class="section-label" style="top:8px; left:1100px">Recursos / Dados</div>
 
-  <!-- USER -->
-  <div class="node node-user" id="n-user" style="left:16px; top:240px;">
+  <!-- SESSION START -->
+  <div class="node node-session" id="n-session" style="left:16px; top:55px;">
     <div class="node-header">
-      <div class="node-icon">👤</div>
-      <div class="node-title">Usuário</div>
+      <div class="node-icon">🚀</div>
+      <div class="node-title">Start State</div>
     </div>
-    <div class="node-label">Atendente</div>
-    <div class="node-model">CLI Terminal</div>
+    <div class="node-label">Session Start</div>
+    <div class="node-model">POST /session/start</div>
     <div class="node-io">
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> user_message: str</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> user_id, session_id</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> user_name, user_email</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> plano: Essencial|Pro|Ent.</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> SessionContext</div>
+    </div>
+  </div>
+
+  <!-- FASTAPI / USER -->
+  <div class="node node-user" id="n-api" style="left:16px; top:310px;">
+    <div class="node-header">
+      <div class="node-icon">⚡</div>
+      <div class="node-title">FastAPI</div>
+    </div>
+    <div class="node-label">POST /chat</div>
+    <div class="node-model">api.py · Orchestrator</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> message: str</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> session_id, user_id</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> ChatResponse</div>
     </div>
   </div>
 
   <!-- GUARD -->
-  <div class="node node-guard" id="n-guard" style="left:220px; top:180px;">
+  <div class="node node-guard" id="n-guard" style="left:240px; top:200px;">
     <div class="node-header">
       <div class="node-icon">🛡️</div>
       <div class="node-title">Guard Agent</div>
@@ -213,25 +191,45 @@
     <div class="node-model">llama-3.1-8b-instant</div>
     <div class="node-io">
       <div class="io-row"><span class="io-badge badge-in">IN</span> content, user_id</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> action, category, reason</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> action: allow|block|warn</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> category: security|safety</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> category: clean|escalation</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> should_escalate: bool</div>
+    </div>
+  </div>
+
+  <!-- STOP CHECKER -->
+  <div class="node node-checker" id="n-stopcheck" style="left:452px; top:90px;">
+    <div class="node-header">
+      <div class="node-icon">⬡</div>
+      <div class="node-title">Stop Checker</div>
+    </div>
+    <div class="node-label">Decisão Determinística</div>
+    <div class="node-model">Python · orchestrator.py</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-check">CHECK</span> should_escalate?</div>
+      <div class="io-row"><span class="io-badge badge-check">CHECK</span> action == "block"?</div>
+      <div class="io-row"><span class="io-badge badge-out">→</span> STOP → EscalationAgent</div>
+      <div class="io-row"><span class="io-badge badge-out">→</span> block → msg rejeição</div>
+      <div class="io-row"><span class="io-badge badge-out">→</span> allow → Router</div>
     </div>
   </div>
 
   <!-- BLOCK -->
-  <div class="node node-block" id="n-block" style="left:220px; top:390px;">
+  <div class="node node-block" id="n-block" style="left:452px; top:400px;">
     <div class="node-header">
       <div class="node-icon">🚫</div>
       <div class="node-title">Bloqueado</div>
     </div>
-    <div class="node-label">Resposta de Bloqueio</div>
-    <div class="node-model">action = "block"</div>
+    <div class="node-label">Msg de Rejeição</div>
+    <div class="node-model">action=block · sem_escalate</div>
     <div class="node-io">
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> [SECURITY/SAFETY] motivo</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> "Não posso processar..."</div>
     </div>
   </div>
 
   <!-- ROUTER -->
-  <div class="node node-router" id="n-router" style="left:440px; top:180px;">
+  <div class="node node-router" id="n-router" style="left:650px; top:200px;">
     <div class="node-header">
       <div class="node-icon">🔀</div>
       <div class="node-title">Router Agent</div>
@@ -240,12 +238,14 @@
     <div class="node-model">llama-3.1-8b-instant</div>
     <div class="node-io">
       <div class="io-row"><span class="io-badge badge-in">IN</span> content, chat_history</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> agent, reasoning</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> agent: knowledge|data</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> agent: escalation</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> reasoning: str</div>
     </div>
   </div>
 
   <!-- KNOWLEDGE AGENT -->
-  <div class="node node-knowledge" id="n-knowledge" style="left:660px; top:60px;">
+  <div class="node node-knowledge" id="n-knowledge" style="left:868px; top:30px;">
     <div class="node-header">
       <div class="node-icon">📚</div>
       <div class="node-title">Knowledge Agent</div>
@@ -254,14 +254,16 @@
     <div class="node-model">llama-3.3-70b-versatile</div>
     <div class="node-io">
       <div class="io-row"><span class="io-badge badge-in">IN</span> question, chat_history</div>
-      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> get_document()</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> answer, sources[]</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> should_escalate</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> session_context</div>
+      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> clock_tool → data_hoje</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> answer: str</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> sources: list[str]</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> traces: list[ToolCall]</div>
     </div>
   </div>
 
   <!-- DATA AGENT -->
-  <div class="node node-data" id="n-data" style="left:660px; top:280px;">
+  <div class="node node-data" id="n-data" style="left:868px; top:270px;">
     <div class="node-header">
       <div class="node-icon">🗄️</div>
       <div class="node-title">Data Agent</div>
@@ -270,43 +272,17 @@
     <div class="node-model">llama-3.3-70b-versatile</div>
     <div class="node-io">
       <div class="io-row"><span class="io-badge badge-in">IN</span> question, chat_history</div>
-      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> sql_db_query()</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> answer, sql_used</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> should_escalate</div>
-    </div>
-  </div>
-
-  <!-- SQLITE TOOL -->
-  <div class="node node-tool" id="n-sqlite" style="left:880px; top:280px;">
-    <div class="node-header">
-      <div class="node-icon">🗃️</div>
-      <div class="node-title">SQLite DB</div>
-    </div>
-    <div class="node-label">atlasshop.db</div>
-    <div class="node-model">SQLDatabaseToolkit</div>
-    <div class="node-io">
-      <div class="io-row"><span class="io-badge badge-in">IN</span> SELECT query</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> clientes, pedidos</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> reembolsos</div>
-    </div>
-  </div>
-
-  <!-- DOCS TOOL -->
-  <div class="node node-tool" id="n-docs" style="left:880px; top:60px;">
-    <div class="node-header">
-      <div class="node-icon">📄</div>
-      <div class="node-title">Knowledge Docs</div>
-    </div>
-    <div class="node-label">knowledge/*.md</div>
-    <div class="node-model">Context Stuffing</div>
-    <div class="node-io">
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> 6 docs injetados</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> no system prompt</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> session_context</div>
+      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> clock_tool → data_hoje</div>
+      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> sql_query (SQLAlchemy)</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> answer: str</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> sql_used: str</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> traces: list[ToolCall]</div>
     </div>
   </div>
 
   <!-- ESCALATION AGENT -->
-  <div class="node node-escalation" id="n-escalation" style="left:660px; top:510px;">
+  <div class="node node-escalation" id="n-escalation" style="left:868px; top:540px;">
     <div class="node-header">
       <div class="node-icon">⚠️</div>
       <div class="node-title">Escalation Agent</div>
@@ -315,115 +291,292 @@
     <div class="node-model">llama-3.3-70b-versatile</div>
     <div class="node-io">
       <div class="io-row"><span class="io-badge badge-in">IN</span> situation, evidence</div>
-      <div class="io-row"><span class="io-badge badge-in">IN</span> client_id, triggered_by</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> level, reason</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> triggered_by: guard|router</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> client_plan</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> level: L1|L2|Fin.|Risco</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> reason, evidence</div>
       <div class="io-row"><span class="io-badge badge-out">OUT</span> next_steps</div>
     </div>
   </div>
 
-  <!-- OUTPUT -->
-  <div class="node node-output" id="n-output" style="left:880px; top:510px;">
+  <!-- DOCS -->
+  <div class="node node-tool" id="n-docs" style="left:1108px; top:30px;">
+    <div class="node-header">
+      <div class="node-icon">📄</div>
+      <div class="node-title">Knowledge Docs</div>
+    </div>
+    <div class="node-label">knowledge/*.md</div>
+    <div class="node-model">Context Stuffing</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> 6 docs no system prompt</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> carregado no __init__</div>
+    </div>
+  </div>
+
+  <!-- SQLITE -->
+  <div class="node node-tool" id="n-sqlite" style="left:1108px; top:270px;">
+    <div class="node-header">
+      <div class="node-icon">🗃️</div>
+      <div class="node-title">SQLite DB</div>
+    </div>
+    <div class="node-label">atlasshop.db</div>
+    <div class="node-model">SQLAlchemy Direct</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> SELECT query (gerada LLM)</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> clientes, pedidos</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> reembolsos (rows)</div>
+    </div>
+  </div>
+
+  <!-- CLOCK TOOL -->
+  <div class="node node-tool" id="n-clock" style="left:1108px; top:490px;">
+    <div class="node-header">
+      <div class="node-icon">🕐</div>
+      <div class="node-title">Clock Tool</div>
+    </div>
+    <div class="node-label">Horário Brasília</div>
+    <div class="node-model">tools/clock_tool.py</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> (sem argumentos)</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> dd/mm/aaaa (Brasília)</div>
+      <div class="io-row"><span class="io-badge badge-tool">TOOL</span> @traceable LangSmith</div>
+    </div>
+  </div>
+
+  <!-- ESCALATION LOG DB -->
+  <div class="node node-db" id="n-escalog" style="left:1108px; top:640px;">
+    <div class="node-header">
+      <div class="node-icon">📋</div>
+      <div class="node-title">Escalation Log</div>
+    </div>
+    <div class="node-label">escalation_logs</div>
+    <div class="node-model">SQLite · escalation_log.py</div>
+    <div class="node-io">
+      <div class="io-row"><span class="io-badge badge-in">IN</span> nivel, motivo, evidencia</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> next_steps, triggered_by</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> id, created_at (audit)</div>
+    </div>
+  </div>
+
+  <!-- RESPONSE FINAL -->
+  <div class="node node-response" id="n-response" style="left:452px; top:670px;">
     <div class="node-header">
       <div class="node-icon">💬</div>
       <div class="node-title">Resposta Final</div>
     </div>
-    <div class="node-label">Terminal Output</div>
-    <div class="node-model">chat.py</div>
+    <div class="node-label">ChatResponse</div>
+    <div class="node-model">FastAPI · api.py</div>
     <div class="node-io">
-      <div class="io-row"><span class="io-badge badge-in">IN</span> answer + escalation</div>
-      <div class="io-row"><span class="io-badge badge-out">OUT</span> texto formatado</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> response: str</div>
+      <div class="io-row"><span class="io-badge badge-in">IN</span> agent_selected: str</div>
+      <div class="io-row"><span class="io-badge badge-out">OUT</span> JSON ao cliente</div>
+    </div>
+  </div>
+
+  <!-- LANGSMITH -->
+  <div class="node node-langsmith" id="n-langsmith" style="left:16px; top:840px; width:1308px;">
+    <div class="node-header">
+      <div class="node-icon">🔭</div>
+      <div class="node-title">LangSmith — Observability &amp; Tracing</div>
+    </div>
+    <div class="node-label" style="display:inline">Monitora automaticamente todas as chains LangChain + tools com @traceable (clock_tool, sql_query)</div>
+    <div style="display:flex; gap:32px; margin-top:8px; flex-wrap:wrap;">
+      <div class="io-row"><span class="io-badge badge-tool">TRACE</span> prompt completo + resposta bruta por agente</div>
+      <div class="io-row"><span class="io-badge badge-tool">TRACE</span> tokens input/output/total + latência por etapa</div>
+      <div class="io-row"><span class="io-badge badge-tool">TRACE</span> input/output das tools Python (@traceable)</div>
+      <div class="io-row"><span class="io-badge badge-tool">CONF</span> LANGSMITH_TRACING=true · LANGSMITH_PROJECT=CAse_winover</div>
     </div>
   </div>
 
   <!-- LEGEND -->
-  <div class="legend" style="top:820px; left:0;">
-    <div class="legend-item"><div class="legend-dot" style="background:#3b4db8"></div> Usuário / CLI</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> Segurança</div>
+  <div class="legend" style="top:948px; left:0;">
+    <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div> Start State (dashed)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b4db8"></div> FastAPI / Orquestrador</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> Segurança (Guard)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ca8a04"></div> Stop Checker (determinístico)</div>
     <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Roteamento</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Conhecimento</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#0891b2"></div> Dados / SQL</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Knowledge</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#0891b2"></div> Data / SQL</div>
     <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div> Escalonamento</div>
     <div class="legend-item"><div class="legend-dot" style="background:#475569"></div> Tool / Recurso</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#166534"></div> Banco / Log</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#155e75"></div> LangSmith</div>
   </div>
 </div>
 
 <script>
 const svg = document.getElementById('lines');
 
-function getCenter(el) {
+function getBox(el) {
   return {
-    x: el.offsetLeft + el.offsetWidth / 2,
-    y: el.offsetTop + el.offsetHeight / 2,
-    t: el.offsetTop,
-    b: el.offsetTop + el.offsetHeight,
-    l: el.offsetLeft,
-    r: el.offsetLeft + el.offsetWidth,
+    x: el.offsetLeft, y: el.offsetTop,
+    w: el.offsetWidth, h: el.offsetHeight,
+    cx: el.offsetLeft + el.offsetWidth / 2,
+    cy: el.offsetTop  + el.offsetHeight / 2,
+    t:  el.offsetTop,
+    b:  el.offsetTop  + el.offsetHeight,
+    l:  el.offsetLeft,
+    r:  el.offsetLeft + el.offsetWidth,
   };
 }
 
-function makePath(x1, y1, x2, y2, color, dashed = false, label = '') {
+function arrow(x2, y2, dx, dy, color) {
+  const len = Math.sqrt(dx*dx + dy*dy) || 1;
+  const nx = dx/len, ny = dy/len;
+  const px = -ny*4, py = nx*4;
+  const pts = `${x2},${y2} ${x2-nx*8+px},${y2-ny*8+py} ${x2-nx*8-px},${y2-ny*8-py}`;
+  const a = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  a.setAttribute('points', pts);
+  a.setAttribute('fill', color);
+  a.setAttribute('opacity', '0.85');
+  svg.appendChild(a);
+}
+
+function line(x1, y1, x2, y2, color, dashed, label) {
   const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
   const d = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', d);
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', color);
-  path.setAttribute('stroke-width', '1.8');
-  path.setAttribute('stroke-opacity', '0.7');
-  if (dashed) path.setAttribute('stroke-dasharray', '5,4');
-  svg.appendChild(path);
-
-  const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-  arrow.setAttribute('points', `${x2},${y2} ${x2-7},${y2-4} ${x2-7},${y2+4}`);
-  arrow.setAttribute('fill', color);
-  arrow.setAttribute('opacity', '0.8');
-  svg.appendChild(arrow);
-
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', color);
+  p.setAttribute('stroke-width', '1.8');
+  p.setAttribute('stroke-opacity', '0.65');
+  if (dashed) p.setAttribute('stroke-dasharray', '5,4');
+  svg.appendChild(p);
+  arrow(x2, y2, x2 - midX, y2 - y1, color);
   if (label) {
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', (x1 + x2) / 2);
-    text.setAttribute('y', (y1 + y2) / 2 - 5);
-    text.setAttribute('fill', color);
-    text.setAttribute('font-size', '9');
-    text.setAttribute('font-family', 'Segoe UI, sans-serif');
-    text.setAttribute('font-weight', '700');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('opacity', '0.9');
-    text.textContent = label;
-    svg.appendChild(text);
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', midX);
+    t.setAttribute('y', midY - 6);
+    t.setAttribute('fill', color);
+    t.setAttribute('font-size', '9');
+    t.setAttribute('font-family', 'Segoe UI, sans-serif');
+    t.setAttribute('font-weight', '700');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('opacity', '0.9');
+    t.textContent = label;
+    svg.appendChild(t);
   }
 }
 
-function drawLines() {
-  svg.innerHTML = '';
-  const user       = getCenter(document.getElementById('n-user'));
-  const guard      = getCenter(document.getElementById('n-guard'));
-  const block      = getCenter(document.getElementById('n-block'));
-  const router     = getCenter(document.getElementById('n-router'));
-  const knowledge  = getCenter(document.getElementById('n-knowledge'));
-  const data       = getCenter(document.getElementById('n-data'));
-  const sqlite     = getCenter(document.getElementById('n-sqlite'));
-  const docs       = getCenter(document.getElementById('n-docs'));
-  const escalation = getCenter(document.getElementById('n-escalation'));
-  const output     = getCenter(document.getElementById('n-output'));
-
-  makePath(user.r, user.y, guard.l, guard.y, '#818cf8', false, 'mensagem');
-  makePath(guard.x, guard.b, block.x, block.t, '#f87171', true, 'block');
-  makePath(guard.r, guard.y, router.l, router.y, '#4ade80', false, 'allow');
-  makePath(router.r, router.y, knowledge.l, knowledge.y, '#c084fc', false, 'knowledge');
-  makePath(router.r, router.y, data.l, data.y, '#22d3ee', false, 'data');
-  makePath(router.r, router.y + 20, escalation.l, escalation.y - 10, '#fbbf24', true, 'escalation');
-  makePath(knowledge.r, knowledge.y, docs.l, docs.y, '#7c3aed', true);
-  makePath(data.r, data.y, sqlite.l, sqlite.y, '#0891b2', true);
-  makePath(knowledge.x + 20, knowledge.b, escalation.x - 20, escalation.t, '#fbbf24', true, 'escalate');
-  makePath(data.x, data.b, escalation.x, escalation.t, '#fbbf24', true, 'escalate');
-  makePath(escalation.r, escalation.y, output.l, output.y, '#fbbf24', false, 'relatório');
-  makePath(knowledge.r + 10, knowledge.b, output.l, output.t + 20, '#c084fc', false, 'resposta');
-  makePath(data.r + 10, data.b - 10, output.l, output.y - 20, '#22d3ee', false);
+// vertical bezier (top→bottom or bottom→top)
+function vline(x1, y1, x2, y2, color, dashed, label) {
+  const midY = (y1 + y2) / 2;
+  const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', color);
+  p.setAttribute('stroke-width', '1.8');
+  p.setAttribute('stroke-opacity', '0.65');
+  if (dashed) p.setAttribute('stroke-dasharray', '5,4');
+  svg.appendChild(p);
+  arrow(x2, y2, x2 - x1, y2 - midY, color);
+  if (label) {
+    const mx = (x1 + x2) / 2 + 6;
+    const my = (y1 + y2) / 2;
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', mx); t.setAttribute('y', my);
+    t.setAttribute('fill', color); t.setAttribute('font-size', '9');
+    t.setAttribute('font-family', 'Segoe UI, sans-serif');
+    t.setAttribute('font-weight', '700');
+    t.setAttribute('opacity', '0.9');
+    t.textContent = label;
+    svg.appendChild(t);
+  }
 }
 
-window.addEventListener('load', () => setTimeout(drawLines, 100));
-window.addEventListener('resize', drawLines);
+function draw() {
+  svg.innerHTML = '';
+  const ses  = getBox(document.getElementById('n-session'));
+  const api  = getBox(document.getElementById('n-api'));
+  const gua  = getBox(document.getElementById('n-guard'));
+  const chk  = getBox(document.getElementById('n-stopcheck'));
+  const blk  = getBox(document.getElementById('n-block'));
+  const rtr  = getBox(document.getElementById('n-router'));
+  const kno  = getBox(document.getElementById('n-knowledge'));
+  const dat  = getBox(document.getElementById('n-data'));
+  const esc  = getBox(document.getElementById('n-escalation'));
+  const docs = getBox(document.getElementById('n-docs'));
+  const sql  = getBox(document.getElementById('n-sqlite'));
+  const clk  = getBox(document.getElementById('n-clock'));
+  const log  = getBox(document.getElementById('n-escalog'));
+  const res  = getBox(document.getElementById('n-response'));
+  const lsm  = getBox(document.getElementById('n-langsmith'));
+
+  // Session Start → Guard (dashed, injects context)
+  line(ses.r, ses.cy, gua.l, gua.t + 30, '#a5b4fc', true, 'SessionContext');
+
+  // FastAPI → Guard
+  line(api.r, api.cy, gua.l, gua.cy + 10, '#818cf8', false, 'mensagem');
+
+  // Guard → Stop Checker
+  line(gua.r, gua.cy, chk.l, chk.cy, '#f87171', false, 'GuardOutput');
+
+  // Stop Checker → Block (vertical down)
+  vline(chk.cx - 20, chk.b, blk.cx, blk.t, '#991b1b', true, 'block');
+
+  // Stop Checker → Escalation Agent (diagonal, STOP path)
+  line(chk.cx + 20, chk.b, esc.l, esc.t + 20, '#f59e0b', false, 'STOP → guard_agent');
+
+  // Stop Checker → Router
+  line(chk.r, chk.cy, rtr.l, rtr.cy, '#4ade80', false, 'allow / warn');
+
+  // Router → Knowledge
+  line(rtr.r, rtr.t + 30, kno.l, kno.cy, '#c084fc', false, 'knowledge');
+
+  // Router → Data
+  line(rtr.r, rtr.cy, dat.l, dat.cy, '#22d3ee', false, 'data');
+
+  // Router → Escalation (dashed, escalation intent from user)
+  line(rtr.r, rtr.b - 20, esc.l, esc.t + 50, '#fbbf24', true, 'escalation');
+
+  // Knowledge → Docs (dashed)
+  line(kno.r, kno.t + 40, docs.l, docs.cy, '#7c3aed', true);
+
+  // Knowledge → Clock Tool (dashed)
+  line(kno.r, kno.b - 20, clk.l, clk.t + 20, '#94a3b8', true, 'clock_tool');
+
+  // Data → SQLite (dashed)
+  line(dat.r, dat.cy, sql.l, sql.cy, '#0891b2', true, 'sql_query');
+
+  // Data → Clock Tool (dashed)
+  line(dat.r, dat.b - 30, clk.l, clk.cy, '#94a3b8', true, 'clock_tool');
+
+  // Escalation → Escalation Log
+  line(esc.r, esc.t + 50, log.l, log.cy, '#4ade80', false, 'registrar_escalamento()');
+
+  // Escalation → Response (standard msg)
+  line(esc.l, esc.cy, res.r, res.cy, '#fbbf24', false, 'msg padrão');
+
+  // Knowledge → Response
+  line(kno.l, kno.b, res.r, res.t + 20, '#c084fc', false, 'answer');
+
+  // Data → Response
+  line(dat.l, dat.b, res.r, res.cy - 10, '#22d3ee', false, 'answer');
+
+  // Block → Response
+  vline(blk.cx, blk.b, res.cx, res.t, '#991b1b', true, 'msg rejeição');
+
+  // LangSmith observes everything (dashed horizontal bar above it)
+  const lsmTop = lsm.t - 6;
+  const obsPath = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  obsPath.setAttribute('x', lsm.l);
+  obsPath.setAttribute('y', lsmTop);
+  obsPath.setAttribute('width', lsm.w);
+  obsPath.setAttribute('height', lsm.h + 6);
+  obsPath.setAttribute('fill', 'none');
+  obsPath.setAttribute('stroke', '#155e75');
+  obsPath.setAttribute('stroke-width', '1');
+  obsPath.setAttribute('stroke-dasharray', '6,4');
+  obsPath.setAttribute('rx', '12');
+  obsPath.setAttribute('opacity', '0.4');
+  svg.appendChild(obsPath);
+}
+
+window.addEventListener('load', () => setTimeout(draw, 100));
+window.addEventListener('resize', draw);
 </script>
 </body>
 </html>

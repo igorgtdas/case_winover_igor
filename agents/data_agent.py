@@ -1,205 +1,244 @@
 """
-Data Agent — Especialista em dados operacionais (SQL)
-Especialidade: consultar clientes, pedidos e reembolsos via SQL no SQLite.
+================================================================================
+Data Agent — Especialista em Dados Operacionais (SQL)
+================================================================================
 
-Parâmetros configuráveis via .env:
-    DATA_MODEL, DATA_TEMPERATURE, DATA_TOP_P, DATA_MAX_TOKENS
-    DATA_CONTEXT_WINDOW → quantas mensagens anteriores o agente recebe (padrão 5 turnos)
+O QUE É:
+    Agente especialista acionado quando a mensagem envolve consulta a registros
+    específicos do banco: pedidos, clientes ou reembolsos identificados por ID,
+    nome ou CPF.
 
-Input:
-    DataInput(
-        question:     str,
-        chat_history: list[dict]   # [{"role": "user"|"assistant", "content": str}]
-    )
+PARA QUE SERVE:
+    Responder perguntas operacionais em duas etapas:
+      1. LLM converte a pergunta em uma query SELECT segura (apenas leitura)
+      2. SQLAlchemy executa a query no SQLite; LLM interpreta o resultado em
+         linguagem natural, alertando para status críticos (fraud_review, chargeback)
 
-Output:
-    DataOutput(
-        answer:            str,
-        sql_used:          str | None,    # última query SQL executada
-        raw_data:          dict | None,   # dados brutos retornados
-        should_escalate:   bool,
-        escalation_reason: str | None
-    )
+O QUE USA:
+    - LangChain (ChatPromptTemplate + MessagesPlaceholder + StrOutputParser)
+    - build_llm() de core/config.py (llama-3.3-70b-versatile, temperature=0)
+    - core/database.py → SQLAlchemy engine conectado ao atlasshop.db (SQLite)
+    - core/knowledge_loader.py → contexto de regras injetado no prompt de interpretação
+    - tools/clock_tool.py → data atual para calcular "há quantos dias"
+    - core/session_context.py → nome do colaborador na resposta
+    - core/trace.py → registra clock_tool e sql_query no histórico
+    - LangSmith (@traceable) → rastreamento de execução da query
 
-Tools disponíveis (via SQLDatabaseToolkit):
-    sql_db_list_tables(tool_input: "")  -> "clientes, pedidos, reembolsos"
-    sql_db_schema(table_names: str)     -> "CREATE TABLE ..."
-    sql_db_query(query: str)            -> resultado da query em texto
-    sql_db_query_checker(query: str)    -> query validada ou erro
+COM QUEM CONVERSA:
+    ← Recebe de: Orchestrator (quando RouterAgent retorna agent="data")
+    → Retorna para: Orchestrator com DataOutput (answer, sql_used, traces)
+    → Não chama outros agentes; decisão de escalonamento cabe ao Guard/Router
 
-Tabelas disponíveis:
-    clientes   (cliente_id, nome_cliente, segmento, plano, cidade, estado, mrr_brl, status_cliente, data_inicio, owner_cs)
-    pedidos    (pedido_id, cliente_id, plano, ciclo, valor_brl, status_pedido, status_pagamento, data_ativacao, data_cancelamento, ultimo_evento_em, canal_origem, observacao_operacional)
-    reembolsos (reembolso_id, pedido_id, status_reembolso, motivo, valor_brl, criado_em, atualizado_em, observacao)
+================================================================================
+Dois passos:
+  1. LLM gera SQL a partir da pergunta
+  2. SQLAlchemy executa; LLM interpreta o resultado
 
-Regras de negócio ao interpretar resultados:
-    - status_pagamento = 'fraud_review'  → sinalizar escalonamento para Risco
-    - status_pagamento = 'chargeback'    → sinalizar escalonamento para Financeiro
-    - plano = 'Enterprise'               → prioridade alta na resposta
-    - reembolso já existente para pedido → não sugerir abertura de novo
-
-Formato esperado no final da resposta do LLM:
-    ESCALAR: true/false
-    NIVEL: Risco | Financeiro | L2 | none
-    MOTIVO: <motivo ou N/A>
-    SQL_USADO: <última query executada>
+Decisao de escalonamento: exclusivamente do Guard e do Router.
 """
 
 import re
+import logging
 
 from pydantic import BaseModel
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import create_react_agent, AgentExecutor
-from core.config import DATA_PARAMS, GROQ_API_KEY
+from sqlalchemy import text
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
+from core.config import DATA_PARAMS, build_llm
+from core.database import get_engine
 from core.knowledge_loader import load_all_docs
-from tools.sql_tools import get_sql_tools
+from core.session_context import SessionContext
+from core.trace import ToolCall
+from tools.clock_tool import hoje_brasilia
+from langsmith import traceable
+
+logger = logging.getLogger(__name__)
 
 
 class DataInput(BaseModel):
     question: str
     chat_history: list[dict] = []
+    session_context: SessionContext | None = None
 
 
 class DataOutput(BaseModel):
     answer: str
     sql_used: str | None = None
-    raw_data: dict | None = None
-    should_escalate: bool = False
-    escalation_reason: str | None = None
+    traces: list[ToolCall] = []
 
 
-_SYSTEM_PROMPT = """
-Você é o especialista em dados operacionais do AtlasShop Assist.
-Você tem acesso ao banco SQLite com as tabelas: clientes, pedidos, reembolsos.
+_SQL_PROMPT = """Você é o Atlas SQL, especialista em geração de queries SQLite para o banco operacional da AtlasShop.
+Sua missão é converter a pergunta do atendente em uma query SELECT precisa e segura.
 
-## Contexto de negócio (políticas vigentes):
-{knowledge_summary}
+Safety Rules
+1) Gere APENAS queries SELECT. Nunca INSERT, UPDATE, DELETE ou DDL.
+2) Nunca invente nomes de colunas ou tabelas — use apenas o schema abaixo.
+3) Se a pergunta não puder ser respondida com o schema disponível, gere: SELECT 'informacao_nao_disponivel_no_banco'
 
-## Regras ao interpretar dados:
-- status_pagamento = 'fraud_review'  → inclua no final: ESCALAR: true | NIVEL: Risco
-- status_pagamento = 'chargeback'    → inclua no final: ESCALAR: true | NIVEL: Financeiro
-- plano = 'Enterprise'               → destaque prioridade alta
-- reembolso já existente             → informe o status atual, não sugira novo
 
-## Formato obrigatório ao final da resposta:
-ESCALAR: true/false
-NIVEL: Risco | Financeiro | L2 | none
-MOTIVO: <motivo detalhado ou N/A>
-SQL_USADO: <última query SQL executada>
+Input:
+Pergunta em linguagem natural do atendente de suporte.
+
+
+Output:
+SQL puro em uma linha. Sem markdown, sem blocos de código, sem explicações, sem ponto-e-vírgula no final.
+
+
+Exemplos:
+
+Entrada: "qual o status do pedido P1003?" → SELECT pedido_id, status_pedido, status_pagamento FROM pedidos WHERE pedido_id = 'P1003'
+Entrada: "E qual é o canal de origem desse pedido?" → SELECT canal_origem FROM pedidos WHERE pedido_id = 'avaliar numero do pedido no histórico'
+Entrada: "o cliente C005 tem reembolso aberto?" → SELECT r.reembolso_id, r.status_reembolso, r.valor_brl FROM reembolsos r JOIN pedidos p ON r.pedido_id = p.pedido_id WHERE p.cliente_id = 'C005'
+Entrada: "quais pedidos estão em fraud_review?" → SELECT pedido_id, cliente_id, valor_brl, ultimo_evento_em FROM pedidos WHERE status_pagamento = 'fraud_review'
+
+
+Fallback:
+Se a pergunta envolver regras de negócio que você não consegue resolver (ex: "está no prazo?", "pode cancelar?", "tem direito a reembolso?"),
+busque os dados brutos do pedido/cliente/reembolso mencionado — datas, status, valores — para que a etapa seguinte possa aplicar as regras.
+Exemplo: "pedido P1005 está dentro do prazo?" → SELECT pedido_id, status_pedido, status_pagamento, data_ativacao, data_cancelamento, ultimo_evento_em FROM pedidos WHERE pedido_id = 'P1005'
+
+Somente retorne SELECT 'informacao_nao_disponivel_no_banco' se nenhum identificador (pedido, cliente, reembolso) for mencionado e a pergunta não puder ser respondida com o schema.
+
+
+Schema disponível (SQLite):
+- clientes   (cliente_id, nome_cliente, segmento, plano, cidade, estado, mrr_brl, status_cliente, data_inicio, owner_cs)
+- pedidos    (pedido_id, cliente_id, plano, ciclo, valor_brl, status_pedido, status_pagamento, data_ativacao, data_cancelamento, ultimo_evento_em, canal_origem, observacao_operacional)
+- reembolsos (reembolso_id, pedido_id, status_reembolso, motivo, valor_brl, criado_em, atualizado_em, observacao)"""
+
+_INTERPRET_PROMPT = """Você é o Atlas Data, especialista em interpretação de dados operacionais para o AtlasShop Assist, assistente interno de suporte da AtlasShop.
+Sua missão é transformar o resultado bruto de uma query SQL em uma resposta clara, útil e contextualizada para o atendente.
+
+
+Tools disponíveis:
+- clock_tool: data de hoje em Brasília = {data_hoje} — use para calcular "há quantos dias", "faz quanto tempo", vigências
+- sql_query: a query executada e o resultado bruto estão disponíveis abaixo
+- knowledge_summary: contexto de negócio e regras operacionais disponíveis abaixo
+
+
+Safety Rules
+1) Interprete apenas os dados retornados — nunca invente ou extrapole registros.
+2) Se o resultado for "Nenhum resultado encontrado" ou "informacao_nao_disponivel_no_banco", informe claramente.
+3) Se já existir reembolso registrado, informe o status atual sem sugerir novo reembolso.
+4) Se status_pagamento for fraud_review ou chargeback, sinalize claramente para o atendente.
+
+
+Input:
+Colaborador: {user_name} | Data de hoje: {data_hoje}
+Contexto de negócio: {knowledge_summary}
+IMPORTANTE: o histórico de conversa é apenas contexto. Sua resposta deve ser baseada exclusivamente no resultado SQL da pergunta atual, informado na mensagem do usuário.
+
+
+Output:
+Resposta em linguagem natural, clara e objetiva.
+Para cálculos de tempo, use o formato: "X dias (desde dd/mm/aaaa)".
+
+
+Exemplos
+Resultado: status_pagamento=fraud_review → "Atenção: o pedido P1008 está em fraud_review. Recomendo acionar o time de Risco."
+Resultado: reembolso criado_em=2026-06-12, data_hoje=22/06/2026 → "O reembolso foi aprovado há 10 dias (desde 12/06/2026)."
+Resultado: vazio → "Não encontrei registros para essa consulta no banco de dados."
+
+
+Fallback
+Se o resultado do banco for vazio ou "informacao_nao_disponivel_no_banco", responda:
+"Não encontrei registros para essa consulta. Verifique o identificador informado ou consulte o time responsável."
+
+Tone:
+Profissional e direto. Destaque alertas operacionais (fraud_review, chargeback, Enterprise) de forma visível.
 """
 
 
-def _truncar_historico(chat_history: list[dict], context_window: int) -> list[dict]:
-    """
-    Retorna apenas as últimas `context_window` trocas do histórico.
-    Cada troca = 2 mensagens (user + assistant).
-    context_window=0 → retorna lista vazia.
-    """
+def _truncar_historico(chat_history: list[dict], context_window: int) -> list:
     if context_window == 0:
         return []
-    return chat_history[-(context_window * 2):]
+    apenas_conversa = [m for m in chat_history if m["role"] in ("user", "assistant")]
+    fatia = apenas_conversa[-(context_window * 2):]
+    mensagens = []
+    for m in fatia:
+        if m["role"] == "user":
+            mensagens.append(HumanMessage(content=m["content"]))
+        else:
+            mensagens.append(AIMessage(content=m["content"]))
+    return mensagens
 
 
-def _parse_agent_output(raw: str) -> DataOutput:
-    """
-    Extrai campos estruturados da resposta em texto livre do agente ReAct.
-
-    O LLM é instruído a encerrar a resposta com:
-        ESCALAR: true/false
-        NIVEL: Risco | Financeiro | L2 | none
-        MOTIVO: <motivo ou N/A>
-        SQL_USADO: <query>
-
-    Esta função lê essas marcações com regex e popula o DataOutput.
-    """
-
-    # --- ESCALAR --------------------------------------------------------------
-    # Formato esperado: ESCALAR: true  ou  ESCALAR: false
-    should_escalate = False
-    escalar_match = re.search(r"ESCALAR:\s*(true|false)", raw, re.IGNORECASE)
-    if escalar_match:
-        should_escalate = escalar_match.group(1).lower() == "true"
-
-    # --- NIVEL ----------------------------------------------------------------
-    # Usado apenas para compor o motivo de escalonamento
-    # Formato esperado: NIVEL: Risco
-    nivel: str | None = None
-    nivel_match = re.search(
-        r"NIVEL:\s*(Risco|Financeiro|L2|L1|none)", raw, re.IGNORECASE
-    )
-    if nivel_match:
-        nivel = nivel_match.group(1).strip()
-
-    # --- MOTIVO ---------------------------------------------------------------
-    # Formato esperado: MOTIVO: Pedido em fraud_review
-    escalation_reason: str | None = None
-    motivo_match = re.search(r"MOTIVO:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE)
-    if motivo_match:
-        motivo = motivo_match.group(1).strip()
-        if motivo.upper() not in ("N/A", "NA", "NONE", ""):
-            # Inclui o nível na razão para facilitar o escalonamento downstream
-            escalation_reason = f"[{nivel}] {motivo}" if nivel else motivo
-
-    # --- SQL_USADO ------------------------------------------------------------
-    # Formato esperado: SQL_USADO: SELECT * FROM pedidos WHERE ...
-    sql_used: str | None = None
-    sql_match = re.search(r"SQL_USADO:\s*(.+?)(?:\n\n|$)", raw, re.IGNORECASE | re.DOTALL)
-    if sql_match:
-        sql_candidate = sql_match.group(1).strip()
-        # Ignora valores vazios ou "N/A"
-        if sql_candidate.upper() not in ("N/A", "NA", "NONE", ""):
-            sql_used = sql_candidate
-
-    # TODO: remover as marcações do campo `answer` antes de exibir ao usuário:
-    #   answer_limpo = re.sub(r"\n?(ESCALAR:|NIVEL:|MOTIVO:|SQL_USADO:).+", "", raw).strip()
-
-    return DataOutput(
-        answer=raw,
-        sql_used=sql_used,
-        raw_data=None,  # TODO: popular com resultado bruto da última query se necessário
-        should_escalate=should_escalate,
-        escalation_reason=escalation_reason,
-    )
+def _extrair_sql(raw: str) -> str:
+    sql = re.sub(r"```(?:sql)?", "", raw, flags=re.IGNORECASE).strip()
+    return sql.strip("`").strip()
 
 
 class DataAgent:
     def __init__(self):
-        self.llm = ChatGroq(
-            model=DATA_PARAMS["model"],
-            api_key=GROQ_API_KEY,
-            temperature=DATA_PARAMS["temperature"],
-            max_tokens=DATA_PARAMS["max_tokens"],
-        )
-        self.tools = get_sql_tools()
-        self.knowledge_summary = load_all_docs()
+        self.llm = build_llm(DATA_PARAMS)
+        self.engine = get_engine()
+        knowledge_summary = load_all_docs()
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", _SYSTEM_PROMPT.format(knowledge_summary=self.knowledge_summary)),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
+        # sql_chain recebe histórico para resolver referências ("esse pedido", "o mesmo cliente")
+        sql_prompt = ChatPromptTemplate.from_messages([
+            ("system", _SQL_PROMPT),
+            MessagesPlaceholder("chat_history", optional=True),
+            ("human", "{question}"),
         ])
+        self.sql_chain = sql_prompt | self.llm | StrOutputParser()
 
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        self.executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            handle_parsing_errors=True,
-            # TODO: adicionar max_iterations para evitar loops infinitos do ReAct
-            # max_iterations=5,
-        )
+        # interpret_chain recebe histórico para contexto de conversa, mas a resposta
+        # deve ser baseada exclusivamente no resultado SQL atual (reforçado no prompt)
+        interpret_prompt = ChatPromptTemplate.from_messages([
+            ("system", _INTERPRET_PROMPT),
+            MessagesPlaceholder("chat_history", optional=True),
+            ("human", "Pergunta atual: {question}\nSQL executado: {sql}\nResultado do banco: {resultado}\n\nResponda APENAS com base no resultado acima. Não use respostas anteriores do histórico como resposta."),
+        ]).partial(knowledge_summary=knowledge_summary)
+        self.interpret_chain = interpret_prompt | self.llm | StrOutputParser()
+
+    @traceable(name="sql_query", run_type="tool")
+    def _executar_sql(self, sql: str) -> str:
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(text(sql)).fetchall()
+            if not rows:
+                return "Nenhum resultado encontrado."
+            return "\n".join(str(row) for row in rows)
+        except Exception as exc:
+            logger.warning("DataAgent: erro ao executar SQL '%s': %s", sql, exc)
+            return f"Erro ao executar a query: {exc}"
 
     def run(self, input_data: DataInput) -> DataOutput:
-        # Aplica a janela de contexto antes de passar o histórico ao executor
-        historico = _truncar_historico(
-            input_data.chat_history,
-            DATA_PARAMS["context_window"],
-        )
+        historico = _truncar_historico(input_data.chat_history, DATA_PARAMS["context_window"])
+        ctx = input_data.session_context
+        traces: list[ToolCall] = []
 
-        result = self.executor.invoke({
-            "input":        input_data.question,
+        # Tool: clock_tool
+        data_hoje = hoje_brasilia()
+        traces.append(ToolCall(
+            tool="clock_tool",
+            agent="data_agent",
+            input={},
+            output=data_hoje,
+        ))
+
+        # Tool: sql_query — passo 1: gera SQL (com histórico para resolver referências)
+        sql_raw = self.sql_chain.invoke({"question": input_data.question, "chat_history": historico})
+        sql = _extrair_sql(sql_raw)
+        logger.info("DataAgent: SQL gerado: %s", sql)
+
+        # Tool: sql_query — passo 2: executa no banco
+        resultado = self._executar_sql(sql)
+        logger.info("DataAgent: resultado: %s", resultado[:200])
+        traces.append(ToolCall(
+            tool="sql_query",
+            agent="data_agent",
+            input={"sql": sql},
+            output=resultado,
+        ))
+
+        raw = self.interpret_chain.invoke({
+            "question":     input_data.question,
+            "sql":          sql,
+            "resultado":    resultado,
             "chat_history": historico,
+            "user_name":    ctx.user_name if ctx else "colaborador",
+            "data_hoje":    data_hoje,
         })
-        return _parse_agent_output(result["output"])
+
+        return DataOutput(answer=raw, sql_used=sql, traces=traces)
