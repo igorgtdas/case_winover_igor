@@ -1,6 +1,6 @@
 """
 Cliente CLI do AtlasShop Assist.
-Bate na API REST — o servidor deve estar rodando (uvicorn api:app --reload).
+Bate na API REST — o servidor deve estar rodando (docker compose up).
 
 Uso:
     python chat.py
@@ -73,7 +73,7 @@ def main():
     except Exception:
         print(f"  Erro: não foi possível conectar em {base}")
         print("  Certifique-se de que o servidor está rodando:")
-        print("    uvicorn api:app --reload\n")
+        print("    docker compose up\n")
         sys.exit(1)
 
     nome, email = configurar_sessao()
