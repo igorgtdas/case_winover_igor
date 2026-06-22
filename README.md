@@ -25,7 +25,7 @@ cd Case_winover
 # 2. Configure o ambiente
 cp .env.example .env        # Linux/macOS
 copy .env.example .env      # Windows
-# Abra .env e preencha GROQ_API_KEY com sua chave
+# Abra .env e preencha GROQ_API_KEY e/ou OPENAI_API_KEY conforme o provider escolhido
 
 # 3. Suba o container
 docker compose up --build
@@ -63,7 +63,7 @@ pip install -r requirements.txt
 # 3. Configure o ambiente
 cp .env.example .env        # Linux/macOS
 copy .env.example .env      # Windows
-# Abra .env e preencha GROQ_API_KEY com sua chave
+# Abra .env e preencha GROQ_API_KEY e/ou OPENAI_API_KEY conforme o provider escolhido
 
 # 4. Crie o banco SQLite a partir dos CSVs (execute uma vez)
 python setup_db.py
