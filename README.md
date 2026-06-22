@@ -46,19 +46,44 @@ docker compose logs -f       # acompanha os logs em tempo real
 
 ### Usando a interface CLI (chat.py)
 
-O `chat.py` é um client que se comunica com o servidor via HTTP. Mantenha o Docker rodando em um terminal e abra um segundo terminal para o chat:
+O `chat.py` é um cliente de terminal interativo que se comunica com a API via HTTP. Ele **não usa nenhuma biblioteca externa** — só módulos da biblioteca padrão do Python (`urllib`, `json`, `uuid`, `argparse`). Qualquer Python 3.x já instalado é suficiente, sem `pip install`.
 
-**Terminal 1:**
+O que ele faz:
+1. Verifica se a API está no ar (`GET /health`)
+2. Pede nome e e-mail para criar a sessão (`POST /session/start`)
+3. Entra em loop de conversa (`POST /chat`)
+4. Aceita o comando `historico` para listar as mensagens e traces de tools da sessão
+5. Aceita `sair` / `Ctrl+C` para encerrar
+
+**Opção 1 — com Python local (mais simples)**
+
+Mantenha o Docker rodando em um terminal e abra um segundo para o chat:
+
 ```bash
+# Terminal 1
 docker compose up
-```
 
-**Terminal 2:**
-```bash
+# Terminal 2
 python chat.py
 ```
 
-> O `chat.py` requer Python instalado localmente, mas apenas para fazer chamadas HTTP para `localhost:8000` — toda a lógica roda dentro do Docker.
+**Opção 2 — sem Python local (tudo via Docker)**
+
+Se não quiser instalar Python na máquina, rode o chat direto dentro do container:
+
+```bash
+docker compose exec atlasshop-assist python chat.py
+```
+
+> O container já tem Python e o `chat.py` incluso. Basta o Docker estar rodando.
+
+**Argumento opcional `--url`**
+
+Por padrão o chat aponta para `http://localhost:8000`. Para apontar para outro host:
+
+```bash
+python chat.py --url http://outro-host:8000
+```
 
 ---
 
