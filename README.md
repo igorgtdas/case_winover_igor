@@ -192,11 +192,14 @@ curl -s -X DELETE http://localhost:8000/session/s01
 │   ├── database.py             # Conexão SQLite via SQLAlchemy
 │   ├── knowledge_loader.py     # Carrega documentos .md da pasta knowledge/
 │   ├── session_context.py      # Start State — variáveis iniciais da sessão
-│   └── escalation_log.py       # Registro de escalonamentos no banco
+│   ├── escalation_log.py       # Registro de escalonamentos no banco
+│   ├── rate_limit.py           # Tratamento de RateLimitError do Groq (429)
+│   └── trace.py                # Modelo ToolCall — rastreamento de chamadas de tools
 │
 ├── tools/
 │   ├── knowledge_tools.py      # Tools LangChain para consulta de documentos
-│   └── sql_tools.py            # Tools LangChain (SQLDatabaseToolkit)
+│   ├── sql_tools.py            # Tools LangChain (SQLDatabaseToolkit)
+│   └── clock_tool.py           # Retorna data/hora atual no fuso de Brasília
 │
 ├── knowledge/                  # Base de conhecimento interna (arquivos .md)
 │   ├── catalogo_planos.md
@@ -430,6 +433,51 @@ O usuário recebe mensagem neutra; o relatório completo (nível, evidência, pr
 
 ### Parsing por regex com fallbacks
 Instrução de formato no system prompt + extração por regex. Fallbacks garantem que situações críticas (fraud_review, chargeback) nunca sejam ignoradas silenciosamente mesmo quando o modelo diverge do formato instruído.
+
+---
+
+## Rate Limit
+
+Quando o Groq retorna erro 429 (Too Many Requests), o Orchestrator captura via `core/rate_limit.py` e exibe ao usuário:
+
+> *"O assistente está temporariamente sobrecarregado (limite de requisições atingido). Aguarde alguns instantes e tente novamente."*
+
+Nenhum erro HTTP 500 é propagado. O turno é registrado no histórico da sessão com `agent_selected: "rate_limit"` para rastreabilidade.
+
+---
+
+## Clock Tool
+
+Os agentes Knowledge e Data injetam a data atual de Brasília no prompt via `tools/clock_tool.py`:
+
+```python
+from tools.clock_tool import hoje_brasilia
+data_hoje = hoje_brasilia()   # "22/06/2026"
+```
+
+Isso permite que o LLM calcule diferenças de dias corretamente sem alucinar a data, ex:
+
+> *"O reembolso foi aprovado há 10 dias (desde 12/06/2026). O prazo de 7 dias venceu em 19/06/2026."*
+
+A chamada é rastreada pelo LangSmith como `run_type="tool"` (aparece no trace como `clock_tool`).
+
+---
+
+## Rastreamento de Tools (ToolCall)
+
+Cada chamada de ferramenta feita pelos agentes (`clock_tool`, `sql_query`) gera um `ToolCall` definido em `core/trace.py`. O Orchestrator anexa esses registros ao histórico da sessão com `role="tool"`, tornando-os visíveis em `GET /session/{id}/history`:
+
+```json
+{
+  "role":   "tool",
+  "agent":  "data_agent",
+  "tool":   "sql_query",
+  "input":  { "sql": "SELECT * FROM pedidos WHERE id = 'P1008'" },
+  "output": "[('P1008', 'entregue', '2026-06-12')]"
+}
+```
+
+Os registros de tool **não poluem o contexto enviado ao LLM** — o `_truncar_historico` filtra apenas `user` e `assistant`.
 
 ---
 
