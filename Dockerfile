@@ -7,9 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Cria o banco SQLite a partir dos CSVs na inicialização
-RUN python setup_db.py
-
 EXPOSE 8000
 
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "python setup_db.py && uvicorn api:app --host 0.0.0.0 --port 8000"]

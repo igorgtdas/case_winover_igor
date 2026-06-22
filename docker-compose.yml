@@ -6,8 +6,5 @@ services:
     env_file:
       - .env
     volumes:
-      - db_data:/app/data
+      - ./atlasshop.db:/app/atlasshop.db
     restart: unless-stopped
-
-volumes:
-  db_data:
