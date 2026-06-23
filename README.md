@@ -228,7 +228,7 @@ Mensagens para experimentar via Postman, curl ou `python chat.py`:
 | Política | `"qual a janela de reembolso vigente?"` | knowledge |
 | Planos | `"quais são os planos disponíveis?"` | knowledge |
 | Dados por ID | `"qual o status do pedido P1008?"` | data |
-| Dados por nome | `"me fala sobre o cliente João Silva"` | data |
+| Dados por nome | `"me fala sobre o cliente Loja Aurora"` | data |
 | Fraude | `"quais pedidos estão em fraud_review hoje?"` | data → escalation |
 | Ameaça judicial | `"vou processar a empresa agora"` | guard → escalation (registra no banco) |
 | Reclamação | `"quero registrar uma reclamação do cliente"` | escalation (pede o ID do pedido) |
