@@ -8,7 +8,7 @@ Construído com LangChain + Groq (LLaMA) + FastAPI. Interface via terminal ou Po
 
 ## Pré-requisitos
 
-- Conta Groq com chave de API: https://console.groq.com/keys
+- Conta Groq ou OpenAi com chave de API
 - **Docker** (recomendado) — ou Python 3.11+ para rodar sem Docker
 
 ---
