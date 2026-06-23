@@ -3,7 +3,6 @@
 .venv/
 __pycache__/
 *.pyc
-atlasshop.db
 *.egg-info/
 .idea/
 .vscode/
